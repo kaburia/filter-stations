@@ -1,2 +1,2 @@
 [console_scripts]
-my-script = my_package.my_script:main
+my-script = filter_stations.my_script:main

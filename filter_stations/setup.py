@@ -1,22 +1,24 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
     name='filter_stations',
-    version='0.1',
+    version='0.2.0',
+    packages=find_packages(),
+    include_package_data=True,
     description='Making it easier to navigate and clean station data',
     author='Austin Kaburia',
     author_email='kaburiaaustin1@gmail.com',
-    url='https://github.com/yourusername/my-package',
-    packages=['filter_stations'],
+    url='https://github.com/kaburia/Packaging/tree/main/filter_stations',
     install_requires=[
         'pandas',
         'requests',
         'python-dateutil',
         'argparse',
+        'haversine'
     ],
     entry_points={
         'console_scripts': [
-            'my-script=my_package.my_script:main'
+            'my-script=filter_stations.my_script:main'
         ]
     }
 )

@@ -4,6 +4,7 @@ import pandas as pd
 import argparse
 import dateutil.parser
 import math
+import haversine as hs
 
 # Get the centre point of the address
 def getLocation(address):
@@ -113,6 +114,18 @@ def filterStations(address, distance, startDate=None, endDate=None, csvfile='KEc
 # A list of filtered stations
 def filterStationsList(address, distance=100):
     return list(set([i.split('_')[0] for i in filterStations(f'{address}', distance).columns if i.split('_')[-1] != 'clogFlag']))
+
+# A dictionary of neighbouring stations
+def k_neighbours(station, number=5):
+    '''
+    Pass in a station - return the longitude and latitude from get stations info
+    '''
+    lon, lat = getStationsInfo(station)[['location.longitude', 'location.latitude']].values[0]
+    infostations = getStationsInfo()
+    infostations['distance'] = infostations.apply(lambda row: hs.haversine((lat, lon), (row['location.latitude'], row['location.longitude'])), axis=1)
+    infostations = infostations.sort_values('distance')
+    return  dict(infostations[['code', 'distance']].head(number).values[1:])
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Locating the different stations')

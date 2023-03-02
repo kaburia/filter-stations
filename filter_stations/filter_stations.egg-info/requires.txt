@@ -2,3 +2,4 @@ pandas
 requests
 python-dateutil
 argparse
+haversine

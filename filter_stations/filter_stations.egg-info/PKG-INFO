@@ -1,7 +1,7 @@
 Metadata-Version: 2.1
 Name: filter-stations
-Version: 0.1
+Version: 0.2.0
 Summary: Making it easier to navigate and clean station data
-Home-page: https://github.com/yourusername/my-package
+Home-page: https://github.com/kaburia/Packaging/tree/main/filter_stations
 Author: Austin Kaburia
 Author-email: kaburiaaustin1@gmail.com
