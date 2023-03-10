@@ -5,6 +5,25 @@ import argparse
 import dateutil.parser
 import math
 import haversine as hs
+import folium
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from IPython.display import HTML
+from io import BytesIO
+import base64
+import json
+
+try:
+    # Load json cofig file
+    with open('config.json') as f:
+        conf = json.load(f)
+
+    apiKey = conf['apiKey']
+    apiSecret = conf['apiSecret']
+except FileNotFoundError:
+    raise("Please create a config.json file with your API key and secret")
+
 
 # Get the centre point of the address
 def getLocation(address):
@@ -125,6 +144,161 @@ def k_neighbours(station, number=5):
     infostations['distance'] = infostations.apply(lambda row: hs.haversine((lat, lon), (row['location.latitude'], row['location.longitude'])), axis=1)
     infostations = infostations.sort_values('distance')
     return  dict(infostations[['code', 'distance']].head(number).values[1:])
+
+
+def draw_map(map_center):
+    #  retrieve the stations data
+    stations = getStationsInfo()[['code', 'location.longitude', 'location.latitude']]
+    # create a map centered on a specific location
+
+    my_map = folium.Map(location=map_center, min_zoom=5, max_zoom=30, zoom_start=12, tiles='cartodbpositron')
+    for _, row in stations.iterrows():
+        folium.Marker([row['location.latitude'], row['location.longitude']], tooltip=row['code']).add_to(my_map)
+
+
+    # fit the map bounds to the markers' locations
+    marker_locations = [[row['location.latitude'], row['location.longitude']] for _, row in stations.iterrows()]
+    my_map.fit_bounds(marker_locations)
+
+    # display the map
+    return my_map
+
+
+def create_animation(data, valid_sensors, day=100, T=10, interval=500):
+    '''
+    T days giving the range 
+    valid sensors
+    '''
+    
+    data1 = np.array(data[valid_sensors].iloc[day:day+1]).T
+    data1 /= np.max(data1)
+    # Create figure and axis
+    fig, ax = plt.subplots()
+
+    # Define function to update matrix data
+    def update(i):
+        # Generate new data
+        new_data =  np.array(data[valid_sensors].iloc[int(day):int(day+1+i)]).T
+        new_data /= np.max(new_data)
+
+        # Update matrix data
+        im.set_array(new_data)
+
+        return [im]
+
+    # Create matrix plot
+    im = ax.imshow(data1, aspect='auto', interpolation=None)
+
+    # Create animation
+    ani = animation.FuncAnimation(fig, update, frames=range(T), interval=interval, blit=False)
+    plt.close()
+
+    return HTML(ani.to_jshtml())
+
+
+'''
+1. Get the stations information
+2. From the points given get the map center
+3. Get a max and min zoom for the map
+4. Place the data in a map with a certain colour
+5. a different marker for a different subset of the data
+6. Pass an argument for the start and end date
+7. Generate plots for each station for the given date range and add them to the map as a popup on click
+8. Create a slider to change the day on the plots 
+'''
+def plot_station(ws, df_rainfall):
+    # filter columns based on station code and type (sensor or clog flag)
+    sensors = [x for x in list(df_rainfall.keys()) if ws in x and 'clog' not in x]
+    clog_flags = [x for x in list(df_rainfall.keys()) if ws in x and 'clog' in x]
+
+    # check if any data is present
+    if not sensors and not clog_flags:
+        return None
+
+    # create subplots
+    try:
+        fig, ax = plt.subplots(nrows=len(sensors)+len(clog_flags), ncols=1, figsize=(13,13))
+    except:
+        return None
+
+    # plot data for sensors and clog flags
+    
+    # plot data for sensors and clog flags
+    df_rainfall[sensors].plot(subplots=True, ax=ax[:len(sensors)])
+    df_rainfall[clog_flags].plot(subplots=True, ax=ax[len(sensors):])
+
+    # adjust spacing between subplots
+    plt.subplots_adjust(hspace=0.5)
+
+    # add x and y axis labels and title
+    plt.xlabel('Time')
+    plt.ylabel('Rainfall')
+    plt.suptitle('Rainfall data for sensors and clog flags at station {}'.format(ws))
+    plt.close()
+    return fig
+
+
+# Encode the image
+def encode_image(ws, df_rainfall):
+    figure = plot_station(ws, df_rainfall)
+    if figure is not None:
+        figure.tight_layout()
+        buf = BytesIO()
+        figure.savefig(buf, format='png')
+        plt.close() # close the figure object to remove the subplot
+        buf.seek(0)
+        # Encode the image data as base64
+        image_data = base64.b64encode(buf.read()).decode('utf-8')
+        return '<img src="data:image/png;base64,{}">'.format(image_data)
+    else:
+        return 'No data available for station {}'.format(ws)
+
+
+
+def get_map(subset1, subset2, start_date=None, end_date=None, data_values=False, csv_file='KEcheck3.csv', min_zoom=8, max_zoom=11):
+    # Read the csv file 
+    df_rainfall = pd.read_csv(csv_file)
+    df_rainfall['Date'] = pd.to_datetime(df_rainfall['Date'])
+    df_rainfall= df_rainfall.set_index('Date')
+    if start_date and end_date:
+        df_rainfall = df_rainfall[start_date:end_date]
+    # get the stations data
+    stations = getStationsInfo()[['code', 'location.longitude', 'location.latitude']]
+    subset1_stations = list(set([clog.split('_')[0] for clog in subset1])) # ideally the fine stations
+    subset2_stations = list(set([clog.split('_')[0] for clog in subset2])) # clogged stations
+    union_stations = list(set(subset1_stations).union(subset2_stations))
+
+    # Find the centre from the union of the stations
+    stations_df = stations[stations['code'].isin(union_stations)]
+    map_center = [stations_df['location.latitude'].mean(), stations_df['location.longitude'].mean()]
+
+    # get the map center
+    # map_center = [stations['location.latitude'].mean(), stations['location.longitude'].mean()]
+
+    # create a map centered on a specific location
+    my_map = folium.Map(map_center, min_zoom=min_zoom, max_zoom=max_zoom, zoom_start=8, tiles='cartodbpositron')
+
+    # add the markers to the map
+    for _, row in stations.iterrows():
+        if row['code'] in subset1_stations:
+            # Create an IFrame object with the image as the content
+            if data_values:
+                popup_iframe = folium.IFrame(html=f"{encode_image(row['code'], df_rainfall)}", width=400, height=300)
+                folium.Marker([row['location.latitude'], row['location.longitude']], popup=folium.Popup(popup_iframe),  
+                            tooltip=row['code']).add_to(my_map)
+            else:
+                folium.Marker([row['location.latitude'], row['location.longitude']], 
+                            tooltip=row['code']).add_to(my_map)                
+        if row['code'] in subset2_stations:
+            if data_values:
+                popup_iframe = folium.IFrame(html=f"{encode_image(row['code'], df_rainfall)}", width=400, height=300)
+                folium.Marker([row['location.latitude'], row['location.longitude']], popup=folium.Popup(popup_iframe),  
+                            tooltip=row['code'], icon=folium.Icon(color='red', icon='info-sign')).add_to(my_map)
+            else:
+                folium.Marker([row['location.latitude'], row['location.longitude']],  
+                            tooltip=row['code'], icon=folium.Icon(color='red', icon='info-sign')).add_to(my_map)
+    # display the map
+    return my_map
 
 
 def parse_args():
