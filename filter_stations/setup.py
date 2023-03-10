@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='filter_stations',
-    version='0.2.0',
+    version='0.1.4',
     packages=find_packages(),
     include_package_data=True,
     description='Making it easier to navigate and clean station data',
@@ -14,7 +14,11 @@ setup(
         'requests',
         'python-dateutil',
         'argparse',
-        'haversine'
+        'haversine',
+        'matplotlib',
+        'numpy',
+        'IPython',
+        'folium'
     ],
     entry_points={
         'console_scripts': [

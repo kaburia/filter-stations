@@ -1,4 +1,6 @@
+MANIFEST.in
 setup.py
+filter_stations/KEcheck3.csv
 filter_stations/__init__.py
 filter_stations.egg-info/PKG-INFO
 filter_stations.egg-info/SOURCES.txt
