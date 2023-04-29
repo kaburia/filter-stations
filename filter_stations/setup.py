@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='filter_stations',
-    version='0.1.7',
+    version='0.2.0',
     packages=find_packages(),
     include_package_data=True,
     description='Making it easier to navigate and clean station data',
@@ -21,7 +21,8 @@ setup(
         'matplotlib',
         'numpy',
         'IPython',
-        'folium'
+        'folium',
+        'datetime'
     ],
     entry_points={
         'console_scripts': [
