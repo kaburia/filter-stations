@@ -3,5 +3,5 @@
 pip install twine
 python setup.py sdist bdist_wheel
 twine upload dist/*
-pip install filter-stations==0.1
+pip install filter-stations
 ```
