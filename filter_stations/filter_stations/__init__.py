@@ -153,6 +153,25 @@ class retreive_data:
         
         # Create dictionary of nearest neighbouring stations and their distances
         return dict(infostations[['code', 'distance']].head(number).values[1:])
+    
+    # trained models in stored in mongoDB
+    def trained_models(self, columns=None):
+        """
+        Retrieves trained models from the MongoDB.
+
+        Args:
+            columns (list of str, optional): List of column names to include in the returned DataFrame. 
+                If None, all columns are included. Defaults to None.
+
+        Returns:
+            pandas.DataFrame: DataFrame containing trained models with the specified columns.
+        """
+        reqUrl = "https://tahmorqctest.eu-de.mybluemix.net/api/models" # endpoint
+        response = self.__request(reqUrl, {})
+        if columns:
+            return pd.DataFrame(response.json())[columns]
+        else:
+            return pd.DataFrame(response.json())
 
     
     def aggregate_variables(self, dataframe):
@@ -176,23 +195,28 @@ class retreive_data:
     # Get the variables only
     def get_measurements(self, station, startDate=None, endDate=None, variables=None, dataset='controlled', aggregate=False):
             """
-            Get measurements for a specified station and time period.
+            Get measurements from a station.
 
-            :param station: The station ID for which to retrieve measurements.
-            :type station: str
-            :param startDate: The start date of the time period for which to retrieve measurements.
-            :type startDate: datetime or str, optional
-            :param endDate: The end date of the time period for which to retrieve measurements.
-            :type endDate: datetime or str, optional
-            :param variables: A list of variable shortcodes to retrieve measurements for. If None, all variables are retrieved.
-            :type variables: list or None, optional
-            :param dataset: The dataset to retrieve measurements from. Default is 'controlled'.
-            :type dataset: str, optional
-            :param aggregate: Whether to aggregate variables by sensor ID. Default is False.
-            :type aggregate: bool, optional
-            :return: A Pandas DataFrame containing the requested measurements.
-            :rtype: pandas.DataFrame
-            """
+            Parameters:
+            -----------
+            station: str
+                The station ID.
+            startDate: str, optional
+                The start date of the measurement period in the format 'YYYY-MM-DD'.
+            endDate: str, optional
+                The end date of the measurement period in the format 'YYYY-MM-DD'.
+            variables: list, optional
+                The variables to retrieve measurements for. If None, all variables are retrieved.
+            dataset: str, optional
+                The dataset to retrieve measurements from. Default is 'controlled'.
+            aggregate: bool, optional
+                Whether to aggregate the measurements by variable. Default is False.
+
+            Returns:
+            --------
+            pd.DataFrame
+                A DataFrame containing the measurements.
+            """            
             #print('Get measurements', station, startDate, endDate, variables)
             endpoint = 'services/measurements/v2/stations/%s/measurements/%s' % (station, dataset)
 
@@ -366,7 +390,7 @@ class Filter(retreive_data):
         return super().get_stations_info(station, multipleStations, countrycode)
         
     # Get the centre point of the address
-    def getLocation(self, address):
+    def centre_point(self, address):
         """
         This method retrieves the latitude and longitude coordinates of a given address using the Nominatim API.
         
@@ -386,13 +410,19 @@ class Filter(retreive_data):
     # Get the new radius of the address
     def calculate_new_point(self, lat, lon, distance, bearing):
         """
-        Calculate a new point given a starting point, distance, and bearing.
-        
-        :param lat: starting latitude in degrees
-        :param lon: starting longitude in degrees
-        :param distance: distance to move in meters
-        :param bearing: bearing to move in degrees (0 is north)
-        :return: tuple containing the new latitude and longitude in degrees
+        Calculates a new geographic point based on the given latitude, longitude,
+        distance and bearing.
+
+        Parameters:
+            lat (float): The latitude of the starting point in decimal degrees.
+            lon (float): The longitude of the starting point in decimal degrees.
+            distance (float): The distance in kilometers from the starting point to the new point.
+            bearing (float): The bearing in degrees from the starting point to the new point,
+                measured clockwise from true north.
+
+        Returns:
+            Tuple[float, float]: A tuple containing the latitude and longitude of the new point,
+            respectively, in decimal degrees.
         """
         distance = distance * 1000
         # Convert degrees to radians
@@ -443,7 +473,7 @@ class Filter(retreive_data):
     # Get the minimum and maximum latitude and longitude of the address
 
 
-    def filterStations(self, address, distance, startDate=None, endDate=None, csvfile='KEcheck3.csv'):
+    def filter_stations(self, address, distance, startDate=None, endDate=None, csvfile='KEcheck3.csv'):
         """
         This method filters weather station data within a certain distance from a given address.
         
@@ -457,7 +487,7 @@ class Filter(retreive_data):
         Returns:
         pandas.DataFrame: The filtered weather station data within the bounding box.
         """     
-        lat, lon = self.getLocation(address)
+        lat, lon = self.centre_point(address)
         min_lat, min_lon, max_lat, max_lon = self.compute_filter(float(lat), float(lon), distance)
         stations = super().get_stations_info()
         bounds = list(stations['code'][(stations['location.longitude'] >= min_lon)
@@ -486,7 +516,7 @@ class Filter(retreive_data):
 
 
     # A list of filtered stations
-    def filterStationsList(self, address, distance=100):
+    def filter_stations_list(self, address, distance=100):
         """
         Filters stations based on their proximity to a given address and returns a list of station codes that fall within the specified distance.
         
@@ -497,7 +527,7 @@ class Filter(retreive_data):
         Returns:
             List of station codes that fall within the specified distance from the given address.
         """
-        return list(set([i.split('_')[0] for i in self.filterStations(f'{address}', distance).columns if i.split('_')[-1] != 'clogFlag']))
+        return list(set([i.split('_')[0] for i in self.filter_stations(f'{address}', distance).columns if i.split('_')[-1] != 'clogFlag']))
 
     
 
@@ -535,13 +565,13 @@ class Interactive_maps(retreive_data):
         return my_map
 
 
-    def create_animation(self, data, valid_sensors, day=100, T=10, interval=500):
+    def animation_image(self, sensors,  start_date, end_date, day=100, T=10, interval=500, data=None):
         '''
         Creates an animation of pollutant levels for a given range of days and valid sensors.
 
         Parameters:
         data (DataFrame): A pandas DataFrame containing pollution data.
-        valid_sensors (list): A list of valid sensor names.
+        sensors (list): A list of valid sensor names.
         day (int): The starting day of the animation (default is 100).
         T (int): The range of days for the animation (default is 10).
         interval (int): The interval between frames in milliseconds (default is 500).
@@ -549,8 +579,13 @@ class Interactive_maps(retreive_data):
         Returns:
         HTML: An HTML object containing the animation.
         '''
+        if not data:
+            data = pd.read_csv('KEcheck3.csv')
+            data['Date'] = pd.to_datetime(data['Date'])
+            data = data.loc[(data['Date'] >= start_date) & (data['Date'] <= end_date)]
+
         
-        data1 = np.array(data[valid_sensors].iloc[day:day+1]).T
+        data1 = np.array(data[sensors].iloc[day:day+1]).T
         data1 /= np.max(data1)
         # Create figure and axis
         fig, ax = plt.subplots()
@@ -558,7 +593,7 @@ class Interactive_maps(retreive_data):
         # Define function to update matrix data
         def update(i):
             # Generate new data
-            new_data =  np.array(data[valid_sensors].iloc[int(day):int(day+1+i)]).T
+            new_data =  np.array(data[sensors].iloc[int(day):int(day+1+i)]).T
             new_data /= np.max(new_data)
 
             # Update matrix data
@@ -571,9 +606,41 @@ class Interactive_maps(retreive_data):
 
         # Create animation
         ani = animation.FuncAnimation(fig, update, frames=range(T), interval=interval, blit=False)
+
         plt.close()
 
         return HTML(ani.to_jshtml())
+    
+    # create animation grid
+    def animation_grid(self, mu_pred, xi, xj, valid_station_df, clogged_station_df, T=10):
+        """
+        Creates an animation of the predicted data on a grid over time.
+
+        Parameters:
+        mu_pred (ndarray): The predicted data on a grid over time.
+        xi (ndarray): The x-coordinates of the grid.
+        xj (ndarray): The y-coordinates of the grid.
+        valid_station_df (DataFrame): A DataFrame containing the information of the valid stations.
+        clogged_station_df (DataFrame): A DataFrame containing the information of the clogged stations.
+        T (int): The number of time steps.
+
+        Returns:
+        HTML: The animation as an HTML object.
+        """
+        fig, ax = plt.subplots()
+
+        def animate(t):
+            ax.clear()
+            ax.set_title('Time step {}'.format(t))
+            ax.pcolor(xi, xj, mu_pred[:, t:t+1].reshape(xi.shape), shading='auto')
+            ax.plot(valid_station_df['Longitude'], valid_station_df['Latitude'], '.')
+            ax.plot(clogged_station_df['Longitude'], clogged_station_df['Latitude'], 'r.')
+
+        ani = animation.FuncAnimation(fig, animate, frames=T, interval=500, blit=False)
+        plt.close()
+        
+        return HTML(ani.to_jshtml())
+
 
 
     def plot_station(self, ws, df_rainfall):
@@ -646,7 +713,7 @@ class Interactive_maps(retreive_data):
 
 
 
-    def get_map(self, subset_list, start_date=None, end_date=None, data_values=False, csv_file='KEcheck3.csv', min_zoom=8, max_zoom=11, width=850, height=850, png_resolution=300):
+    def get_map(self, subset_list, start_date=None, end_date=None, data_values=False, csv_file='KEcheck3.csv', min_zoom=8, max_zoom=11, width=2000, height=2000, png_resolution=300):
         """
         Creates a Folium map showing the locations of the weather stations in the given subsets.
 
@@ -715,7 +782,7 @@ class Interactive_maps(retreive_data):
                 if row['code'] in subs:
                     # Create an IFrame object with the image as the content
                     if data_values:
-                        popup_iframe = folium.IFrame(html=f"{self.encode_image(row['code'], df_rainfall)}", width=width//2, height=height//2)
+                        popup_iframe = folium.IFrame(html=f"{self.encode_image(row['code'], df_rainfall)}", width=width//8, height=height//8)
                         folium.Marker([row['location.latitude'], row['location.longitude']], popup=folium.Popup(popup_iframe),  
                                     tooltip=row['code'], icon=folium.Icon(color=color_markers[num])).add_to(my_map)
                     else:
@@ -737,4 +804,4 @@ if __name__ == '__main__':
     args = parse_args()
     
     if args.address or args.csvfile:
-        filter.filterStations(address=args.address, csvfile=args.csvfile)
+        filter.filter_stations(address=args.address, csvfile=args.csvfile)
