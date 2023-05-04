@@ -68,13 +68,15 @@ class retreive_data:
         """
         Retrieves information about weather stations from an API endpoint and returns relevant information based on the parameters passed to it.
 
-        Args:
-            station (str, optional): Code for a single station to retrieve information for. Defaults to None.
-            multipleStations (list, optional): List of station codes to retrieve information for multiple stations. Defaults to [].
-            countrycode (str, optional): Country code to retrieve information for all stations located in the country. Defaults to None.
+        Parameters:
+        -----------
+        - station (str, optional): Code for a single station to retrieve information for. Defaults to None.
+        - multipleStations (list, optional): List of station codes to retrieve information for multiple stations. Defaults to [].
+        - countrycode (str, optional): Country code to retrieve information for all stations located in the country. Defaults to None.
 
         Returns:
-            pandas.DataFrame: DataFrame containing information about the requested weather stations.
+        -----------
+        - pandas.DataFrame: DataFrame containing information about the requested weather stations.
 
         """
         # Make API request and convert response to DataFrame
@@ -98,7 +100,8 @@ class retreive_data:
         Retrieves information about available weather variables from an API endpoint.
 
         Returns:
-            dict: Dictionary containing information about available weather variables, keyed by variable shortcode.
+        -----------
+        - dict: Dictionary containing information about available weather variables, keyed by variable shortcode.
         """
         # Make API request and create dictionary of variables
         response = self.__request(endpoints['VARIABLES'], {})
@@ -136,12 +139,14 @@ class retreive_data:
         """
         Returns a dictionary of the nearest neighbouring stations to the specified station.
 
-        Args:
-            station (str): Code for the station to find neighbouring stations for.
-            number (int, optional): Number of neighbouring stations to return. Defaults to 5.
+        Parameters:
+        -----------
+        - station (str): Code for the station to find neighbouring stations for.
+        - number (int, optional): Number of neighbouring stations to return. Defaults to 5.
 
         Returns:
-            dict: Dictionary containing the station codes and distances of the nearest neighbouring stations.
+        -----------
+        - dict: Dictionary containing the station codes and distances of the nearest neighbouring stations.
         """
         # Get latitude and longitude of specified station
         lon, lat = self.get_stations_info(station)[['location.longitude', 'location.latitude']].values[0]
@@ -159,12 +164,14 @@ class retreive_data:
         """
         Retrieves trained models from the MongoDB.
 
-        Args:
-            columns (list of str, optional): List of column names to include in the returned DataFrame. 
+        Parameters:
+        -----------
+        - columns (list of str, optional): List of column names to include in the returned DataFrame. 
                 If None, all columns are included. Defaults to None.
 
         Returns:
-            pandas.DataFrame: DataFrame containing trained models with the specified columns.
+        -----------
+        - pandas.DataFrame: DataFrame containing trained models with the specified columns.
         """
         reqUrl = "https://tahmorqctest.eu-de.mybluemix.net/api/models" # endpoint
         response = self.__request(reqUrl, {})
@@ -178,11 +185,13 @@ class retreive_data:
         """
         Aggregates a pandas DataFrame of weather variables by summing values across each day.
 
-        Args:
-            dataframe (pandas.DataFrame): DataFrame containing weather variable data.
+        Parameters:
+        -----------
+        - dataframe (pandas.DataFrame): DataFrame containing weather variable data.
 
         Returns:
-            pandas.DataFrame: DataFrame containing aggregated weather variable data, summed by day.
+        -----------
+        - pandas.DataFrame: DataFrame containing aggregated weather variable data, summed by day.
         """
         # Reset index and rename columns
         dataframe = dataframe.reset_index()
@@ -199,22 +208,22 @@ class retreive_data:
 
             Parameters:
             -----------
-            station: str
+            - station: str
                 The station ID.
-            startDate: str, optional
+            - startDate: str, optional
                 The start date of the measurement period in the format 'YYYY-MM-DD'.
-            endDate: str, optional
+            - endDate: str, optional
                 The end date of the measurement period in the format 'YYYY-MM-DD'.
-            variables: list, optional
+            - variables: list, optional
                 The variables to retrieve measurements for. If None, all variables are retrieved.
-            dataset: str, optional
+            - dataset: str, optional
                 The dataset to retrieve measurements from. Default is 'controlled'.
-            aggregate: bool, optional
+            - aggregate: bool, optional
                 Whether to aggregate the measurements by variable. Default is False.
 
             Returns:
             --------
-            pd.DataFrame
+            - pd.DataFrame
                 A DataFrame containing the measurements.
             """            
             #print('Get measurements', station, startDate, endDate, variables)
@@ -340,17 +349,20 @@ class retreive_data:
         Retrieves measurements for multiple stations and saves the aggregated data to a CSV file.
 
         Parameters:
-            stations_list (list): A list of strings containing the names of the stations to retrieve data from.
-            csv_file (str): The name of the CSV file to save the data to.
-            startDate (str): The start date for the measurements, in the format 'yyyy-mm-dd'.
-            endDate (str): The end date for the measurements, in the format 'yyyy-mm-dd'.
-            variables (list): A list of strings containing the names of the variables to retrieve.
-            dataset (str): The name of the dataset to retrieve the data from. Default is 'controlled'.
+        -----------
+        - stations_list (list): A list of strings containing the names of the stations to retrieve data from.
+        - csv_file (str): The name of the CSV file to save the data to.
+        - startDate (str): The start date for the measurements, in the format 'yyyy-mm-dd'.
+        - endDate (str): The end date for the measurements, in the format 'yyyy-mm-dd'.
+        - variables (list): A list of strings containing the names of the variables to retrieve.
+        - dataset (str): The name of the dataset to retrieve the data from. Default is 'controlled'.
 
         Returns:
-            df (pandas.DataFrame): A DataFrame containing the aggregated data for all stations.
+        -----------
+        - df (pandas.DataFrame): A DataFrame containing the aggregated data for all stations.
 
         Raises:
+
             ValueError: If stations_list is not a list.
         """
         error_dict = dict()
@@ -396,12 +408,12 @@ class Filter(retreive_data):
         
         Parameters:
         -----------
-        address : str
+        - address : str
             The address of the location you want to retrieve the coordinates for.
             
         Returns:
         --------
-        Tuple (float, float)
+        - Tuple (float, float)
             The latitude and longitude coordinates of the location.
         """
         url = 'https://nominatim.openstreetmap.org/search/' + urllib.parse.quote(address) +'?format=json'
@@ -414,15 +426,17 @@ class Filter(retreive_data):
         distance and bearing.
 
         Parameters:
-            lat (float): The latitude of the starting point in decimal degrees.
-            lon (float): The longitude of the starting point in decimal degrees.
-            distance (float): The distance in kilometers from the starting point to the new point.
-            bearing (float): The bearing in degrees from the starting point to the new point,
-                measured clockwise from true north.
+        -----------
+        - lat (float): The latitude of the starting point in decimal degrees.
+        - lon (float): The longitude of the starting point in decimal degrees.
+        - distance (float): The distance in kilometers from the starting point to the new point.
+        - bearing (float): The bearing in degrees from the starting point to the new point,
+            measured clockwise from true north.
 
         Returns:
-            Tuple[float, float]: A tuple containing the latitude and longitude of the new point,
-            respectively, in decimal degrees.
+        -----------
+        - Tuple[float, float]: A tuple containing the latitude and longitude of the new point,
+        respectively, in decimal degrees.
         """
         distance = distance * 1000
         # Convert degrees to radians
@@ -454,12 +468,14 @@ class Filter(retreive_data):
         Calculates the bounding box coordinates for a given location and distance.
 
         Parameters:
-        lat (float): The latitude of the location.
-        lon (float): The longitude of the location.
-        distance (float): The distance from the location, in kilometers, to the edge of the bounding box.
+        -----------
+        - lat (float): The latitude of the location.
+        - lon (float): The longitude of the location.
+        - distance (float): The distance from the location, in kilometers, to the edge of the bounding box.
 
         Returns:
-        A tuple containing four floats representing the bounding box coordinates: (min_lat, min_lon, max_lat, max_lon).
+        -----------
+        - A tuple containing four floats representing the bounding box coordinates: (min_lat, min_lon, max_lat, max_lon).
         """
         points = []
         g1 = []
@@ -478,14 +494,16 @@ class Filter(retreive_data):
         This method filters weather station data within a certain distance from a given address.
         
         Parameters:
-        address (str): Address to center the bounding box around.
-        distance (float): The distance (in kilometers) from the center to the edge of the bounding box.
-        startDate (str): The start date for filtering the weather station data in the format 'YYYY-MM-DD'.
-        endDate (str): The end date for filtering the weather station data in the format 'YYYY-MM-DD'.
-        csvfile (str): The name of the csv file containing the weather station data.
+        -----------
+        - address (str): Address to center the bounding box around.
+        - distance (float): The distance (in kilometers) from the center to the edge of the bounding box.
+        - startDate (str): The start date for filtering the weather station data in the format 'YYYY-MM-DD'.
+        - endDate (str): The end date for filtering the weather station data in the format 'YYYY-MM-DD'.
+        - csvfile (str): The name of the csv file containing the weather station data.
         
         Returns:
-        pandas.DataFrame: The filtered weather station data within the bounding box.
+        -----------
+        - pandas.DataFrame: The filtered weather station data within the bounding box.
         """     
         lat, lon = self.centre_point(address)
         min_lat, min_lon, max_lat, max_lon = self.compute_filter(float(lat), float(lon), distance)
@@ -520,12 +538,14 @@ class Filter(retreive_data):
         """
         Filters stations based on their proximity to a given address and returns a list of station codes that fall within the specified distance.
         
-        Args:
-            address (str): Address to filter stations by.
-            distance (float, optional): Maximum distance (in kilometers) between the stations and the address. Default is 100 km.
+        Parameters:
+        -----------
+        - address (str): Address to filter stations by.
+        - distance (float, optional): Maximum distance (in kilometers) between the stations and the address. Default is 100 km.
         
         Returns:
-            List of station codes that fall within the specified distance from the given address.
+        -----------
+        - List of station codes that fall within the specified distance from the given address.
         """
         return list(set([i.split('_')[0] for i in self.filter_stations(f'{address}', distance).columns if i.split('_')[-1] != 'clogFlag']))
 
@@ -541,11 +561,13 @@ class Interactive_maps(retreive_data):
         """
         Creates a Folium map centered on the specified location and adds markers for each weather station in the area.
 
-        Args:
-            map_center: a tuple with the latitude and longitude of the center of the map
+        Parameters:
+        -----------
+        - map_center: a tuple with the latitude and longitude of the center of the map
 
         Returns:
-            A Folium map object
+        -----------
+        - A Folium map object
         """
 
         #  retrieve the stations data
@@ -570,14 +592,16 @@ class Interactive_maps(retreive_data):
         Creates an animation of pollutant levels for a given range of days and valid sensors.
 
         Parameters:
-        data (DataFrame): A pandas DataFrame containing pollution data.
-        sensors (list): A list of valid sensor names.
-        day (int): The starting day of the animation (default is 100).
-        T (int): The range of days for the animation (default is 10).
-        interval (int): The interval between frames in milliseconds (default is 500).
+        -----------
+        - data (DataFrame): A pandas DataFrame containing station data defaults to none reads KEcheck3 if none.
+        - sensors (list): A list of valid sensor names.
+        - day (int): The starting day of the animation (default is 100).
+        - T (int): The range of days for the animation (default is 10).
+        - interval (int): The interval between frames in milliseconds (default is 500).
 
         Returns:
-        HTML: An HTML object containing the animation.
+        -----------
+        - HTML: An HTML object containing the animation.
         '''
         if not data:
             data = pd.read_csv('KEcheck3.csv')
@@ -617,15 +641,17 @@ class Interactive_maps(retreive_data):
         Creates an animation of the predicted data on a grid over time.
 
         Parameters:
-        mu_pred (ndarray): The predicted data on a grid over time.
-        xi (ndarray): The x-coordinates of the grid.
-        xj (ndarray): The y-coordinates of the grid.
-        valid_station_df (DataFrame): A DataFrame containing the information of the valid stations.
-        clogged_station_df (DataFrame): A DataFrame containing the information of the clogged stations.
-        T (int): The number of time steps.
+        -----------
+        - mu_pred (ndarray): The predicted data on a grid over time.
+        - xi (ndarray): The x-coordinates of the grid.
+        - xj (ndarray): The y-coordinates of the grid.
+        - valid_station_df (DataFrame): A DataFrame containing the information of the valid stations.
+        - clogged_station_df (DataFrame): A DataFrame containing the information of the clogged stations.
+        - T (int): The number of time steps.
 
         Returns:
-        HTML: The animation as an HTML object.
+        -----------
+        - HTML: The animation as an HTML object.
         """
         fig, ax = plt.subplots()
 
@@ -647,11 +673,13 @@ class Interactive_maps(retreive_data):
         """
         Plot the rainfall data for a specific weather station.
 
-        Args:
+        Parameters:
+        -----------
         - ws: string, the code of the weather station to plot
         - df_rainfall: DataFrame, a pandas DataFrame with rainfall data
 
         Returns:
+        -----------
         - None if no data is available for the specified station
         - a Matplotlib figure showing rainfall data for the specified station otherwise
         """
@@ -691,11 +719,13 @@ class Interactive_maps(retreive_data):
         """
         Encodes a station's rainfall data plot as a base64-encoded image.
 
-        Args:
+        Parameters:
+        -----------
         - ws (str): the code for the station to encode the image for
         - df_rainfall (pandas.DataFrame): a DataFrame containing the rainfall data for all stations
         
         Returns:
+        -----------
         - str: a string containing an HTML image tag with the encoded image data, or a message indicating no data is available for the given station
         """
         figure = self.plot_station(ws, df_rainfall)
@@ -719,30 +749,30 @@ class Interactive_maps(retreive_data):
 
         Parameters:
         -----------
-        subset_list : list of lists of str
+        - subset_list : list of lists of str
             List of subsets of weather stations, where each subset is a list of station codes.
-        start_date : str, optional
+        - start_date : str, optional
             Start date in the format YYYY-MM-DD, default is None.
-        end_date : str, optional
+        - end_date : str, optional
             End date in the format YYYY-MM-DD, default is None.
-        data_values : bool, optional
+        - data_values : bool, optional
             If True, the map markers will display a plot of rainfall data, default is False.
-        csv_file : str, optional
+        - csv_file : str, optional
             The name of the CSV file containing the rainfall data, default is 'KEcheck3.csv'.
-        min_zoom : int, optional
+        - min_zoom : int, optional
             The minimum zoom level of the map, default is 8.
-        max_zoom : int, optional
+        - max_zoom : int, optional
             The maximum zoom level of the map, default is 11.
-        width : int, optional
+        - width : int, optional
             The width of the map in pixels, default is 850.
-        height : int, optional
+        - height : int, optional
             The height of the map in pixels, default is 850.
-        png_resolution : int, optional
+        - png_resolution : int, optional
             The resolution of the PNG image if data_values is True, default is 300.
 
         Returns:
         --------
-        my_map : folium.folium.Map
+        - my_map : folium.folium.Map
             A Folium map object showing the locations of the weather stations in the given subsets.
         """
         # Read the csv file 
