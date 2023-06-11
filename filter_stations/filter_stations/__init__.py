@@ -220,9 +220,11 @@ class retreive_data:
         Aggregate quality flags in a DataFrame by day.
 
         Parameters:
+        -----------
         - dataframe (pd.DataFrame): The DataFrame containing the measurements.
 
         Returns:
+        -----------
         - pd.DataFrame: A DataFrame with aggregated quality flags, where values greater than 1 are rounded up.
 
         """
@@ -241,6 +243,7 @@ class retreive_data:
                 Get measurements from a station.
 
                 Parameters:
+                -----------
                 - station (str): The station ID.
                 - startDate (str, optional): The start date of the measurement period in the format 'YYYY-MM-DD'.
                 - endDate (str, optional): The end date of the measurement period in the format 'YYYY-MM-DD'.
@@ -250,7 +253,8 @@ class retreive_data:
                 - quality_flags (bool, optional): Whether to include quality flag data. Default is False.
 
                 Returns:
-                - pd.DataFrame: A DataFrame containing the measurements.
+                -----------
+                - A DataFrame containing the measurements.
 
             """         
             #print('Get measurements', station, startDate, endDate, variables)
@@ -445,15 +449,17 @@ class retreive_data:
         """
         Retrieves and aggregates quality flag data for multiple stations within a specified date range.
 
-        Args:
-            stations_list (list): A list of station codes for which to retrieve data.
-            startDate (str): The start date in 'YYYY-MM-DD' format.
-            endDate (str): The end date in 'YYYY-MM-DD' format.
-            csv_file (str, optional): The name of the CSV file to save the aggregated data. Default is None.
+        Parameters:
+        -----------
+        - stations_list (list): A list of station codes for which to retrieve data.
+        - startDate (str): The start date in 'YYYY-MM-DD' format.
+        - endDate (str): The end date in 'YYYY-MM-DD' format.
+        - csv_file (str, optional): The name of the CSV file to save the aggregated data. Default is None.
 
         Returns:
-            pandas.DataFrame or None: A DataFrame containing the aggregated quality flag data for the specified stations,
-            or None if an error occurs.
+        -----------
+        - pandas.DataFrame or None: A DataFrame containing the aggregated quality flag data for the specified stations,
+        or None if an error occurs.
 
         Raises:
             Exception: If an error occurs while retrieving data for a station.
@@ -646,16 +652,18 @@ class Filter(retreive_data):
         """
         Generate clog flags DataFrame based on start and end dates.
 
-        Args:
-            startdate (str): Start date in 'YYYY-MM-DD' format.
-            enddate (str): End date in 'YYYY-MM-DD' format.
-            flags_json (str, optional): Path to the JSON file containing clog flags data. Defaults to 'qualityobjects.json'.
-            questionable (bool, optional): Whether to return questionable clog flags. Defaults to False.
-            as_csv (bool, optional): Whether to save the resulting DataFrame as a CSV file. Defaults to False.
-            csv_file (str, optional): Name of the CSV file to save. Only applicable if as_csv is True. Defaults to None.
+        Parameters:
+        -----------
+        - startdate (str): Start date in 'YYYY-MM-DD' format.
+        - enddate (str): End date in 'YYYY-MM-DD' format.
+        - flags_json (str, optional): Path to the JSON file containing clog flags data. Defaults to 'qualityobjects.json'.
+        - questionable (bool, optional): Whether to return questionable clog flags. Defaults to False.
+        - as_csv (bool, optional): Whether to save the resulting DataFrame as a CSV file. Defaults to False.
+        - csv_file (str, optional): Name of the CSV file to save. Only applicable if as_csv is True. Defaults to None.
 
         Returns:
-            pandas.DataFrame: DataFrame containing the clog flags.
+        -----------
+        - pandas.DataFrame: DataFrame containing the clog flags.
 
         """
 
