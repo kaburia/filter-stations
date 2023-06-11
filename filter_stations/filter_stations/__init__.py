@@ -174,12 +174,25 @@ class retreive_data:
         - pandas.DataFrame: DataFrame containing trained models with the specified columns.
         """
         reqUrl = "https://tahmorqctest.eu-de.mybluemix.net/api/models" # endpoint
-        response = self.__request(reqUrl, {})
-        if columns:
-            return pd.DataFrame(response.json())[columns]
+        # response = self.__request(reqUrl, {})
+        print(f'API request: {reqUrl}')
+        apiRequest = requests.get(f'{reqUrl}',
+                                    params={},
+                                    auth=requests.auth.HTTPBasicAuth(
+                                    self.apiKey,
+                                    self.apiSecret
+                                )
+        )
+        if apiRequest.status_code == 200:
+            response =  apiRequest.json()
+            # print(response)
+            if columns:
+                return pd.DataFrame(response)[columns]
+            else:
+                return pd.DataFrame(response)
         else:
-            return pd.DataFrame(response.json())
-
+            return self.__handleApiError(apiRequest)     
+        
     
     def aggregate_variables(self, dataframe):
         """
@@ -202,7 +215,7 @@ class retreive_data:
 
     
     # Get the variables only
-    def get_measurements(self, station, startDate=None, endDate=None, variables=None, dataset='controlled', aggregate=False):
+    def get_measurements(self, station, startDate=None, endDate=None, variables=None, dataset='controlled', aggregate=False, quality_flags=False, quality_and_var=False):
             """
             Get measurements from a station.
 
@@ -307,10 +320,17 @@ class retreive_data:
                         del values
                         del serie
                 else:
+                    # print(pd.DataFrame(seriesHolder[shortcode]))
                     values = list(map(lambda x: x[1], seriesHolder[shortcode]))
                     serie = pd.Series(values, index=pd.DatetimeIndex(timestamps), dtype=np.float64)
 
                     if len(values) > 0:
+                        if quality_flags:
+                            q_flag = list(map(lambda x: x[3], seriesHolder[shortcode]))
+                            serie = pd.Series(q_flag, index=pd.DatetimeIndex(timestamps), dtype=np.int32)
+                            if len(variables) == 1:
+                                series.append(serie.to_frame('%s_%s' % (station, 'Q_Flag')))
+                                # series.append(serie.to_frame('%s_%s_%s' % (station, 'quality_flag')))
                         sensors = list(set(list(map(lambda x: x[2], seriesHolder[shortcode]))))
                         serie = pd.Series(values, index=pd.DatetimeIndex(timestamps), dtype=np.float64)
                         if len(variables) == 1:
@@ -338,10 +358,17 @@ class retreive_data:
             # Clean up memory.
             del series
             gc.collect()
-            if aggregate:
-                return self.aggregate_variables(df)
+            if quality_flags:
+                df = df[[f'{station}_Q_Flag']]
+                if aggregate:
+                    return self.aggregate_variables(df)
+                else:
+                    return df
             else:
-                return df
+                if aggregate:
+                    return self.aggregate_variables(df)
+                else:
+                    return df
     
     # retrieve data from multiple at a time
     def multiple_measurements(self, stations_list, csv_file, startDate, endDate, variables, dataset='controlled'):
@@ -389,8 +416,7 @@ class retreive_data:
         
         else:
             raise ValueError('Pass in a list')
-
-
+        
 
 # Move the functions to a class
 class Filter(retreive_data):
@@ -549,7 +575,97 @@ class Filter(retreive_data):
         """
         return list(set([i.split('_')[0] for i in self.filter_stations(f'{address}', distance).columns if i.split('_')[-1] != 'clogFlag']))
 
-    
+    # get clogs for a certain duration based on quality objects file
+    def clogs(self, startdate, enddate, flags_json='qualityobjects.json', as_csv=False, csv_file=None):
+        """
+        Generate clog flags DataFrame based on start and end dates.
+
+        Args:
+            startdate (str): Start date in 'YYYY-MM-DD' format.
+            enddate (str): End date in 'YYYY-MM-DD' format.
+            flags_json (str, optional): Path to the JSON file containing clog flags data. Defaults to 'qualityobjects.json'.
+            questionable (bool, optional): Whether to return questionable clog flags. Defaults to False.
+            as_csv (bool, optional): Whether to save the resulting DataFrame as a CSV file. Defaults to False.
+            csv_file (str, optional): Name of the CSV file to save. Only applicable if as_csv is True. Defaults to None.
+
+        Returns:
+            pandas.DataFrame: DataFrame containing the clog flags.
+
+        """
+
+        json_data = pd.read_json(flags_json)
+        startdate = datetime.datetime.strptime(startdate, '%Y-%m-%d')
+        enddate = datetime.datetime.strptime(enddate, '%Y-%m-%d')
+
+        # merge the sensorcode and the stationcode to equate to the station_sensor format 
+        json_data['station_sensor'] = json_data['stationCode'] + '_' + json_data['sensorCode']
+        # convert the start and end time to datetime format datetime[ns]
+        json_data['startDate'] = json_data['startDate'].astype('datetime64[ns]')
+        json_data['endDate'] = pd.to_datetime([dateutil.parser.parse(i).strftime('%Y-%m-%d') for i in json_data['endDate']])
+
+        json_data = json_data.drop(['stationCode', 'sensorCode'], axis=1)
+        json_data = json_data[['description', 'startDate', 'endDate', 'station_sensor']]
+
+        other_failure = list(json_data[json_data['description'].str.contains('batter')].index)
+        clog = list(json_data[~json_data['description'].str.contains('batter')].index)
+
+        clog_flags = pd.DataFrame(pd.date_range(startdate, enddate, freq='D'), columns=['Date'])
+
+        clogs_dict = dict()
+        for i in json_data.station_sensor.unique():
+            clogs_dict[f'{i}_clogFlags'] = [np.nan for i in range(len(clog_flags))]
+
+        flags_df = pd.concat([clog_flags, pd.DataFrame(clogs_dict)], axis=1)
+
+        def subset_flags_df(startdate, enddate, column, val):
+            """
+            Update a subset of flags in the DataFrame with a specific value.
+
+            Args:
+                startdate (datetime): Start date of the subset.
+                enddate (datetime): End date of the subset.
+                column (str): Name of the column to update.
+                val: Value to fill in the specified column.
+
+            Returns:
+                None
+
+            """
+            # print(f'Updating {column} from {startdate} to {enddate} to {val}')
+            flags_df.loc[((flags_df['Date'] >= startdate) & (flags_df['Date'] <= enddate)), column] = val
+
+        for ind, row in json_data.iterrows():
+            if ind in other_failure:
+                if row['startDate'] >= startdate and row['endDate'] <= enddate:
+                    subset_flags_df(row['startDate'], row['endDate'], f"{row['station_sensor']}_clogFlags", 2)
+                elif row['startDate'] >= startdate and row['endDate'] > enddate:
+                    subset_flags_df(row['startDate'], enddate, f"{row['station_sensor']}_clogFlags", 2)
+                elif row['startDate'] < startdate and row['endDate'] <= enddate:
+                    subset_flags_df(startdate, row['endDate'], f"{row['station_sensor']}_clogFlags", 2)
+                elif row['startDate'] < startdate and row['endDate'] > enddate:
+                    subset_flags_df(startdate, enddate, f"{row['station_sensor']}_clogFlags", 2)
+            elif ind in clog:
+                if row['startDate'] >= startdate and row['endDate'] <= enddate:
+                    subset_flags_df(row['startDate'], row['endDate'], f"{row['station_sensor']}_clogFlags", 1)
+                elif row['startDate'] >= startdate and row['endDate'] > enddate:
+                    subset_flags_df(row['startDate'], enddate, f"{row['station_sensor']}_clogFlags", 1)
+                elif row['startDate'] < startdate and row['endDate'] <= enddate:
+                    subset_flags_df(startdate, row['endDate'], f"{row['station_sensor']}_clogFlags", 1)
+                elif row['startDate'] < startdate and row['endDate'] > enddate:
+                    subset_flags_df(startdate, enddate, f"{row['station_sensor']}_clogFlags", 1)
+
+        flags_df = flags_df.set_index('Date')
+        flags_df = flags_df.reindex(sorted(flags_df.columns), axis=1)
+
+        if as_csv:
+            if csv_file is not None:
+                flags_df.to_csv(f'{csv_file}.csv', index=True)
+                return flags_df
+            else:
+                flags_df.to_csv('clog_flags.csv', index=True)
+                return flags_df
+        else:
+            return flags_df
 
 # A different class for visualisations
 class Interactive_maps(retreive_data):
