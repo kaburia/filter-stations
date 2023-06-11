@@ -216,40 +216,43 @@ class retreive_data:
     
     # aggregate qualityflags
     def aggregate_qualityflags(self, dataframe):
+        """
+        Aggregate quality flags in a DataFrame by day.
 
+        Parameters:
+        - dataframe (pd.DataFrame): The DataFrame containing the measurements.
 
+        Returns:
+        - pd.DataFrame: A DataFrame with aggregated quality flags, where values greater than 1 are rounded up.
+
+        """
         dataframe = dataframe.reset_index()
-        dataframe.rename(columns={'index':'Date'}, inplace=True)
-        # group by day and calculate the mean if value that day is greater than 1 get the ceiling
+        dataframe.rename(columns={'index': 'Date'}, inplace=True)
+        
+        # Group by day and calculate the mean. If value that day is greater than 1, get the ceiling.
         return dataframe.groupby(pd.Grouper(key='Date', axis=0, freq='1D')).mean().applymap(lambda x: ceil(x) if x > 1 else x)
+
 
 
     
     # Get the variables only
     def get_measurements(self, station, startDate=None, endDate=None, variables=None, dataset='controlled', aggregate=False, quality_flags=False):
             """
-            Get measurements from a station.
+                Get measurements from a station.
 
-            Parameters:
-            -----------
-            - station: str
-                The station ID.
-            - startDate: str, optional
-                The start date of the measurement period in the format 'YYYY-MM-DD'.
-            - endDate: str, optional
-                The end date of the measurement period in the format 'YYYY-MM-DD'.
-            - variables: list, optional
-                The variables to retrieve measurements for. If None, all variables are retrieved.
-            - dataset: str, optional
-                The dataset to retrieve measurements from. Default is 'controlled'.
-            - aggregate: bool, optional
-                Whether to aggregate the measurements by variable. Default is False.
+                Parameters:
+                - station (str): The station ID.
+                - startDate (str, optional): The start date of the measurement period in the format 'YYYY-MM-DD'.
+                - endDate (str, optional): The end date of the measurement period in the format 'YYYY-MM-DD'.
+                - variables (list, optional): The variables to retrieve measurements for. If None, all variables are retrieved.
+                - dataset (str, optional): The dataset to retrieve measurements from. Default is 'controlled'.
+                - aggregate (bool, optional): Whether to aggregate the measurements by variable. Default is False.
+                - quality_flags (bool, optional): Whether to include quality flag data. Default is False.
 
-            Returns:
-            --------
-            - pd.DataFrame
-                A DataFrame containing the measurements.
-            """            
+                Returns:
+                - pd.DataFrame: A DataFrame containing the measurements.
+
+            """         
             #print('Get measurements', station, startDate, endDate, variables)
             endpoint = 'services/measurements/v2/stations/%s/measurements/%s' % (station, dataset)
 
@@ -477,7 +480,7 @@ class retreive_data:
             if len(df_stats) > 0:
                 df = pd.concat(df_stats, axis=1)
                 df.to_csv(f'{csv_file}.csv')
-                return df
+                return df.reindex(sorted(df.columns),axis=1) #sorted dataframe
 
         
 
