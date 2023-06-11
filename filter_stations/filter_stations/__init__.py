@@ -17,11 +17,12 @@ from folium.plugins import MeasureControl
 import os
 import datetime
 import gc
+from math import ceil
 
 
 # Constants
 API_BASE_URL = 'https://datahub.tahmo.org'
-API_MAX_PERIOD = '365D'
+API_MAX_PERIOD = '1Y'
 
 endpoints = {'VARIABLES': 'services/assets/v2/variables', # 28 different variables
              'STATION_INFO': 'services/assets/v2/stations',
@@ -212,10 +213,20 @@ class retreive_data:
         
         # Group by date and sum values
         return dataframe.groupby(pd.Grouper(key='Date', axis=0, freq='1D')).sum()
+    
+    # aggregate qualityflags
+    def aggregate_qualityflags(self, dataframe):
+
+
+        dataframe = dataframe.reset_index()
+        dataframe.rename(columns={'index':'Date'}, inplace=True)
+        # group by day and calculate the mean if value that day is greater than 1 get the ceiling
+        return dataframe.groupby(pd.Grouper(key='Date', axis=0, freq='1D')).mean().applymap(lambda x: ceil(x) if x > 1 else x)
+
 
     
     # Get the variables only
-    def get_measurements(self, station, startDate=None, endDate=None, variables=None, dataset='controlled', aggregate=False, quality_flags=False, quality_and_var=False):
+    def get_measurements(self, station, startDate=None, endDate=None, variables=None, dataset='controlled', aggregate=False, quality_flags=False):
             """
             Get measurements from a station.
 
@@ -309,6 +320,11 @@ class retreive_data:
                         timestamps = list(map(lambda x: pd.Timestamp(x[0]), sensorSerie))
                         values = list(map(lambda x: x[1], sensorSerie))
                         serie = pd.Series(values, index=pd.DatetimeIndex(timestamps), dtype=np.float64)
+                        if quality_flags:
+                            q_flag = list(map(lambda x: x[3], sensorSerie))
+                            serie = pd.Series(q_flag, index=pd.DatetimeIndex(timestamps), dtype=np.int32)
+                            series.append(serie.to_frame('%s_%s_%s' % (station, sensor, 'Q_FLAG')))
+                            continue
                         if len(variables)==1:
                             series.append(serie.to_frame('%s_%s' % (station, sensor)))
                         else:
@@ -328,8 +344,8 @@ class retreive_data:
                         if quality_flags:
                             q_flag = list(map(lambda x: x[3], seriesHolder[shortcode]))
                             serie = pd.Series(q_flag, index=pd.DatetimeIndex(timestamps), dtype=np.int32)
-                            if len(variables) == 1:
-                                series.append(serie.to_frame('%s_%s' % (station, 'Q_Flag')))
+                            series.append(serie.to_frame('%s_%s' % (station, 'Q_FLAG')))
+                            continue
                                 # series.append(serie.to_frame('%s_%s_%s' % (station, 'quality_flag')))
                         sensors = list(set(list(map(lambda x: x[2], seriesHolder[shortcode]))))
                         serie = pd.Series(values, index=pd.DatetimeIndex(timestamps), dtype=np.float64)
@@ -359,9 +375,12 @@ class retreive_data:
             del series
             gc.collect()
             if quality_flags:
-                df = df[[f'{station}_Q_Flag']]
+                # cols = [col for col in df.columns if col.split('_')[-1] == 'Q_FLAG']
+                # print(cols)
+                # df = df[cols]
+                # df = df[[f'{station}_Q_Flag']]
                 if aggregate:
-                    return self.aggregate_variables(df)
+                    return self.aggregate_qualityflags(df)
                 else:
                     return df
             else:
@@ -398,6 +417,7 @@ class retreive_data:
             
             for station in stations_list:
                 print(stations_list.index(station))
+                print(f'Retrieving data for station: {station}')
                 try:
                     data = self.get_measurements(station, startDate, endDate, variables)
                     agg_data = self.aggregate_variables(data)
@@ -416,6 +436,49 @@ class retreive_data:
         
         else:
             raise ValueError('Pass in a list')
+        
+    # multiple quality flags for multiple stations
+    def multiple_qualityflags(self, stations_list, startDate, endDate, csv_file=None):
+        """
+        Retrieves and aggregates quality flag data for multiple stations within a specified date range.
+
+        Args:
+            stations_list (list): A list of station codes for which to retrieve data.
+            startDate (str): The start date in 'YYYY-MM-DD' format.
+            endDate (str): The end date in 'YYYY-MM-DD' format.
+            csv_file (str, optional): The name of the CSV file to save the aggregated data. Default is None.
+
+        Returns:
+            pandas.DataFrame or None: A DataFrame containing the aggregated quality flag data for the specified stations,
+            or None if an error occurs.
+
+        Raises:
+            Exception: If an error occurs while retrieving data for a station.
+
+        """
+        error_dict = dict()
+
+        if isinstance(stations_list, list):
+            df_stats = []
+            
+            for station in stations_list:
+                print(stations_list.index(station))
+                print(f'Retrieving data for station: {station}')
+                try:
+                    data = self.get_measurements(station, startDate, endDate, variables=['pr'], quality_flags=True)
+                    agg_data = self.aggregate_qualityflags(data)
+                    df_stats.append(agg_data)
+                except Exception as e:
+                    error_dict[station] = f'{e}'
+            
+            with open("Errors.json", "w") as outfile:
+                json.dump(error_dict, outfile, indent=4)
+            
+            if len(df_stats) > 0:
+                df = pd.concat(df_stats, axis=1)
+                df.to_csv(f'{csv_file}.csv')
+                return df
+
         
 
 # Move the functions to a class
