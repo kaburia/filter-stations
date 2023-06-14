@@ -1,0 +1,11 @@
+Metadata-Version: 2.1
+Name: filter-stations
+Version: 0.3.9
+Summary: Making it easier to navigate and clean station data
+Home-page: https://github.com/kaburia/Packaging/tree/main/filter_stations
+Author: Austin Kaburia
+Author-email: kaburiaaustin1@gmail.com
+Description-Content-Type: text/markdown
+
+## Documentation
+https://filterstations.netlify.app/
