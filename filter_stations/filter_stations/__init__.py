@@ -18,11 +18,15 @@ import os
 import datetime
 import gc
 from math import ceil
+import statsmodels.api as sm
+from matplotlib.dates import DateFormatter
+import warnings
+warnings. filterwarnings('ignore')
 
 
 # Constants
 API_BASE_URL = 'https://datahub.tahmo.org'
-API_MAX_PERIOD = '1Y'
+API_MAX_PERIOD = '365D'
 
 endpoints = {'VARIABLES': 'services/assets/v2/variables', # 28 different variables
              'STATION_INFO': 'services/assets/v2/stations',
@@ -207,12 +211,17 @@ class retreive_data:
         -----------
         - pandas.DataFrame: DataFrame containing aggregated weather variable data, summed by day.
         """
-        # Reset index and rename columns
         dataframe = dataframe.reset_index()
         dataframe.rename(columns={'index':'Date'}, inplace=True)
-        
-        # Group by date and sum values
-        return dataframe.groupby(pd.Grouper(key='Date', axis=0, freq='1D')).sum()
+        # check if the column is all nan
+        if dataframe.iloc[:, 1].isnull().all():
+                return dataframe.groupby(pd.Grouper(key='Date', axis=0, 
+                                            freq='1D')).agg({f'{dataframe.columns[1]}': 
+                                                             lambda x: np.nan if x.isnull().all() 
+                                                             else x.isnull().sum()})    
+        else:
+                return dataframe.groupby(pd.Grouper(key='Date', axis=0, 
+                                            freq='1D')).sum()
     
     # aggregate qualityflags
     def aggregate_qualityflags(self, dataframe):
@@ -381,11 +390,11 @@ class retreive_data:
             # Clean up memory.
             del series
             gc.collect()
+            # check if dataframe is empty
+            if df.empty:
+                # add the date range in the dataframe and the column as the station filled with NaN
+                df = pd.DataFrame(index=pd.date_range(start=startDate, end=endDate, tz='UTC', freq='5min'), columns=[f'{station}'])
             if quality_flags:
-                # cols = [col for col in df.columns if col.split('_')[-1] == 'Q_FLAG']
-                # print(cols)
-                # df = df[cols]
-                # df = df[[f'{station}_Q_Flag']]
                 if aggregate:
                     return self.aggregate_qualityflags(df)
                 else:
@@ -1011,6 +1020,116 @@ class Interactive_maps(retreive_data):
         
         # display the map
         return my_map
+    
+'''
+A specific class to evaluate and validate the water level data using TAHMO Stations
+To be used as it is to maintain flow
+'''
+class pipeline(retreive_data):
+    # inherit from retrieve_data class
+    def __init__(self, apiKey, apiSecret):
+        super().__init__(apiKey, apiSecret)
+    
+    # given the radius and the longitude and latitude of the gauging station, return the stations within
+    def stations_within_radius(self, radius, latitude, longitude, df=False):
+        stations  = super().get_stations_info()
+        stations['distance'] = stations.apply(lambda row: hs.haversine((latitude, longitude), (row['location.latitude'], row['location.longitude'])), axis=1)
+        infostations = stations[['code', 'location.latitude','location.longitude', 'distance']].sort_values('distance')
+        if df:
+            return infostations[infostations['distance'] <= radius]
+        else:
+            return infostations[infostations['distance'] <= radius].code.values
+        
+    def stations_data_check(self, stations_list, percentage=1, start_date=None, end_date=None, data=None, variables=['pr'], csv_file=None):
+        if data is None:
+            data = super().multiple_measurements(stations_list, startDate=start_date, endDate=end_date, variables=variables, csv_file=csv_file)
+
+        # Check the percentage of missing data and return the stations with less than the percentage of missing data
+        data.index = data.index.astype('datetime64[ns]')
+        data = data.dropna(axis=1, thresh=int(len(data) * percentage))
+        data.to_csv(f'{csv_file}.csv')
+        return data
+    
+    def stations_lag(self, weather_stations_df, gauging_stations_df, gauging_station_columns, date=None, lag=3, above=False, below=False):
+        
+        if date is None:
+            date = gauging_stations_df.loc[0, gauging_station_columns[0]]
+        start_date = datetime.datetime.strptime(date, "%d/%m/%Y")
+        end_date = start_date + datetime.timedelta(len(gauging_stations_df)-1)
+        # get the ddataframe from start date to end date
+        df_fit = weather_stations_df[start_date:end_date]
+        # get the water data list
+        water_list = list(gauging_stations_df[f'{gauging_station_columns[1]}'])
+        above_thresh_lag = dict()
+        below_thresh_lag = dict()
+        # get the lag for every column against the water data 
+        for cols in df_fit.columns:
+            select_list = list(df_fit[cols])
+            coefficient_list = list(sm.tsa.stattools.ccf(select_list,water_list, adjusted=False))
+            a = np.argmax(coefficient_list)
+            b = coefficient_list[a]
+            if a > lag:
+                above_thresh_lag[cols] = {
+                    'lag': a,
+                    'coefficient': b,
+                    'coefficient_list': coefficient_list,
+                    'select_list': select_list,
+                    'water_list' : water_list
+                }
+            else:
+                below_thresh_lag[cols] = {
+                    'lag': a,
+                    'coefficient': b,
+                    'coefficient_list': coefficient_list,
+                    'select_list': select_list,
+                    'water_list' : water_list
+                }
+        if above and below:
+            return above_thresh_lag, below_thresh_lag
+        elif above:
+            return above_thresh_lag
+        elif below:
+            return below_thresh_lag
+        
+    def plot_figs(self, weather_stations, water_list, threshold_list, save=False, dpi=500, date='11-02-2021'):
+        start_date = datetime.datetime.strptime(date, "%d-%m-%Y")
+        end_date = start_date + datetime.timedelta(len(water_list)-1)
+        # weather_stations = weather_stations.set_index('Date')
+        df_plot = weather_stations[start_date:end_date]
+        df_plot = df_plot[threshold_list].reset_index()
+        df_plot.rename(columns={'index':'Date'}, inplace=True)
+        
+        
+        plt.rcParams['figure.figsize'] = (15, 9)
+        print('Begin plotting!')
+        
+        for cols in df_plot.columns[1:]:
+            fig, ax1 = plt.subplots()
+            color = 'tab:blue'
+            ax1.set_xlabel(f'Time', fontsize=24, weight='bold')
+            ax1.set_ylabel(f'Rainfall {cols} (mm)', color=color, fontsize=24, weight='bold')
+            ax1.bar(pd.to_datetime(df_plot['Date'], format="%d/%m/%Y"), df_plot[f'{cols}'], color=color, width=4, alpha=1.0)
+            ax1.tick_params(axis='y', labelcolor=color, labelsize=24)
+            ax1.tick_params(axis='x')
+            ax1.set_xticklabels(df_plot['Date'], fontsize=21, weight='bold')
+            ax1.grid(color='gray', linestyle='--', linewidth=0.8)
+            ax1.set(facecolor="white")
+            ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
+
+            color = 'tab:red'
+            ax2.set_ylabel('Water level/Stage (m)', color=color, fontsize=24, weight='bold')
+            ax2.plot(pd.to_datetime(df_plot['Date'], format="%d/%m/%Y"), water_list, color=color, linewidth=4)
+            ax2.tick_params(axis='y', labelcolor=color, labelsize=24)
+            ax2.set(facecolor="white")
+            plt.title('Stage and Rainfall against Time', fontsize=22, weight='bold')
+
+            date_form = DateFormatter("%m-%y")
+            ax1.xaxis.set_major_formatter(date_form)
+            fig.tight_layout()
+
+            if save:
+                fig.savefig(f'{cols}.png', dpi=dpi)
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Locating the different stations')
