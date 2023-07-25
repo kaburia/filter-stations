@@ -432,10 +432,10 @@ class retreive_data:
             df_stats = []
             
             for station in stations_list:
-                print(stations_list.index(station))
+                print(stations_list.index(station),'/',len(stations_list))
                 print(f'Retrieving data for station: {station}')
                 try:
-                    data = self.get_measurements(station, startDate, endDate, variables)
+                    data = self.get_measurements(station, startDate, endDate, variables, dataset)
                     agg_data = self.aggregate_variables(data)
                     df_stats.append(agg_data)
                 except Exception as e:
@@ -449,7 +449,6 @@ class retreive_data:
                 df.to_csv(f'{csv_file}.csv')
                 return df
 
-        
         else:
             raise ValueError('Pass in a list')
         
@@ -596,7 +595,7 @@ class Filter(retreive_data):
     # Get the minimum and maximum latitude and longitude of the address
 
 
-    def filter_stations(self, address, distance, startDate=None, endDate=None, csvfile='KEcheck3.csv'):
+    def filter_stations(self, address, distance, startDate=None, endDate=None, csvfile='pr_clog_flags.csv'):
         """
         This method filters weather station data within a certain distance from a given address.
         
@@ -792,7 +791,7 @@ class Interactive_maps(retreive_data):
 
         Parameters:
         -----------
-        - data (DataFrame): A pandas DataFrame containing station data defaults to none reads KEcheck3 if none.
+        - data (DataFrame): A pandas DataFrame containing station data defaults to none reads pr_clog_flags if none.
         - sensors (list): A list of valid sensor names.
         - day (int): The starting day of the animation (default is 100).
         - T (int): The range of days for the animation (default is 10).
@@ -803,7 +802,7 @@ class Interactive_maps(retreive_data):
         - HTML: An HTML object containing the animation.
         '''
         if not data:
-            data = pd.read_csv('KEcheck3.csv')
+            data = pd.read_csv('pr_clog_flags.csv')
             data['Date'] = pd.to_datetime(data['Date'])
             data = data.loc[(data['Date'] >= start_date) & (data['Date'] <= end_date)]
 
@@ -942,7 +941,7 @@ class Interactive_maps(retreive_data):
 
 
 
-    def get_map(self, subset_list, start_date=None, end_date=None, data_values=False, csv_file='KEcheck3.csv', min_zoom=8, max_zoom=11, width=2000, height=2000, png_resolution=300):
+    def get_map(self, subset_list, start_date=None, end_date=None, data_values=False, csv_file='pr_clog_flags.csv', min_zoom=8, max_zoom=11, width=2000, height=2000, png_resolution=300):
         """
         Creates a Folium map showing the locations of the weather stations in the given subsets.
 
@@ -957,7 +956,7 @@ class Interactive_maps(retreive_data):
         - data_values : bool, optional
             If True, the map markers will display a plot of rainfall data, default is False.
         - csv_file : str, optional
-            The name of the CSV file containing the rainfall data, default is 'KEcheck3.csv'.
+            The name of the CSV file containing the rainfall data, default is 'pr_clog_flags.csv'.
         - min_zoom : int, optional
             The minimum zoom level of the map, default is 8.
         - max_zoom : int, optional
@@ -1211,11 +1210,15 @@ class pipeline(retreive_data):
                 fig.savefig(f'{cols}.png', dpi=dpi)
 
 
+# From the loaded data on the jobs scored, format the data
+class jobs_data():
+    pass
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Locating the different stations')
 
     parser.add_argument('--address', type=str, required=True, help='Write the address to filter the stations')
-    parser.add_argument('--csvfile', default='KEcheck3.csv', type=str, help='File to be filtered from default KEcheck3.csv')
+    parser.add_argument('--csvfile', default='pr_clog_flags.csv', type=str, help='File to be filtered from default pr_clog_flags.csv')
 
     return parser.parse_args()
 
