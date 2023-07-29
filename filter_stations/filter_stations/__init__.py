@@ -167,6 +167,30 @@ class retreive_data:
         # Create dictionary of nearest neighbouring stations and their distances
         return dict(infostations[['code', 'distance']].head(number).values[1:])
     
+    # retrieve status of the stations
+    def station_status(self):
+        """
+        Retrieves the status of all weather stations 
+
+        Returns:
+        -----------
+        - pandas.DataFrame: DataFrame containing the status of all weather stations.
+        """
+        # Make API request and convert response to DataFrame
+        response = self.__request(endpoints['STATION_STATUS'], {})
+        station_status = pd.json_normalize(response.json())
+        station_status = station_status.drop(labels=station_status['id'][station_status.id.str.contains('TH')].index, axis=0)
+
+        # create a column if active is true and offline_24h is false
+        def active(row):
+            if row['active'] == True and row['offline_24h'] == False:
+                return 1
+            else:
+                return 0
+        station_status['online'] = station_status.apply(active, axis=1)
+        return station_status
+
+    
     # trained models in stored in mongoDB
     def trained_models(self, columns=None):
         """
@@ -181,7 +205,7 @@ class retreive_data:
         -----------
         - pandas.DataFrame: DataFrame containing trained models with the specified columns.
         """
-        reqUrl = "https://tahmorqctest.eu-de.mybluemix.net/api/models" # endpoint
+        reqUrl = "https://sensordx.tahmo.org/api/models" # endpoint
         # response = self.__request(reqUrl, {})
         print(f'API request: {reqUrl}')
         apiRequest = requests.get(f'{reqUrl}',
@@ -1217,8 +1241,38 @@ class Interactive_maps(retreive_data):
 
 
 # From the loaded data on the jobs scored, format the data
-class jobs_data():
-    pass
+class transform_data:
+    # inherit from retrieve_data class
+    def __init__(self, apiKey, apiSecret):
+        super().__init__(apiKey, apiSecret)
+
+    # transform the station status data
+    def transform_station_status(self, station_status, transformed_data=True):
+        # the time of the data to be in the index when the job is run
+        today = datetime.date.today()
+        
+        if transformed_data:
+            # get the station status data
+            status_transposed = station_status[['id', 'online']].T
+            status_transposed.columns = status_transposed.loc['id']
+
+            # Drop the first row (which was the 'id' column) to make it a proper DataFrame
+            status_transposed = status_transposed.drop('id')
+
+            # Convert the index to a datetime index
+            status_transposed.index = pd.to_datetime([today])
+
+            # rename the index to date
+            status_transposed.index.names = ['Date']
+            return status_transposed.to_dict()
+        else:
+            station_status['Date'] = pd.to_datetime([today])
+            return station_status.to_dict()
+    
+    
+
+
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Locating the different stations')
