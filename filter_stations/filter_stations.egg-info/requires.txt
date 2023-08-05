@@ -8,3 +8,4 @@ numpy
 IPython
 folium
 datetime
+statsmodels

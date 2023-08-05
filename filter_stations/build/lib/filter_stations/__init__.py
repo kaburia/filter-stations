@@ -18,6 +18,10 @@ import os
 import datetime
 import gc
 from math import ceil
+import statsmodels.api as sm
+from matplotlib.dates import DateFormatter
+import warnings
+warnings. filterwarnings('ignore')
 
 
 # Constants
@@ -28,7 +32,8 @@ endpoints = {'VARIABLES': 'services/assets/v2/variables', # 28 different variabl
              'STATION_INFO': 'services/assets/v2/stations',
              'WEATHER_DATA': 'services/measurements/v2/stations', # Configured before requesting
              'DATA_COMPLETE': 'custom/sensordx/latestmeasurements',
-             'STATION_STATUS': 'custom/stations/status'}
+             'STATION_STATUS': 'custom/stations/status',
+             'QUALITY_OBJECTS': 'custom/sensordx/reports'}
 
 # authentication class
 
@@ -36,9 +41,10 @@ endpoints = {'VARIABLES': 'services/assets/v2/variables', # 28 different variabl
 # Get data class
 class retreive_data:
     # initialize the class
-    def __init__(self, apiKey, apiSecret):
+    def __init__(self, apiKey, apiSecret, api_key):
         self.apiKey = apiKey
         self.apiSecret = apiSecret
+        self.api_key = api_key
 
     def __handleApiError(self, apiRequest):
         json =None
@@ -83,6 +89,9 @@ class retreive_data:
         # Make API request and convert response to DataFrame
         response = self.__request(endpoints['STATION_INFO'], {'sort':'code'})
         info = pd.json_normalize(response['data']).drop('id', axis=1)
+
+        # remove columns with TH in the code
+        info = info.drop(labels=info['code'][info.code.str.contains('TH')].index, axis=0)
         
         # Filter DataFrame based on parameters
         if station:
@@ -160,6 +169,33 @@ class retreive_data:
         # Create dictionary of nearest neighbouring stations and their distances
         return dict(infostations[['code', 'distance']].head(number).values[1:])
     
+    # retrieve status of the stations
+    def station_status(self):
+        """
+        Retrieves the status of all weather stations 
+
+        Returns:
+        -----------
+        - pandas.DataFrame: DataFrame containing the status of all weather stations.
+        """
+        # Make API request and convert response to DataFrame
+        response = self.__request(endpoints['STATION_STATUS'], {})
+        station_status = pd.json_normalize(response.json())
+        station_status = station_status.drop(labels=station_status['id'][station_status.id.str.contains('TH')].index, axis=0)
+
+        # create a column if active is true and offline_24h is false
+        def active(row):
+            if row['active'] == True and row['offline_24h'] == False:
+                return 1
+            else:
+                return 0
+        station_status['online'] = station_status.apply(active, axis=1)
+        return station_status
+    
+    # get the qc flags
+    # def qc_flags(self, station, startDate=None, endDate=None, variables=None):
+
+    
     # trained models in stored in mongoDB
     def trained_models(self, columns=None):
         """
@@ -174,7 +210,7 @@ class retreive_data:
         -----------
         - pandas.DataFrame: DataFrame containing trained models with the specified columns.
         """
-        reqUrl = "https://tahmorqctest.eu-de.mybluemix.net/api/models" # endpoint
+        reqUrl = "https://sensordx.tahmo.org/api/models" # endpoint
         # response = self.__request(reqUrl, {})
         print(f'API request: {reqUrl}')
         apiRequest = requests.get(f'{reqUrl}',
@@ -428,10 +464,10 @@ class retreive_data:
             df_stats = []
             
             for station in stations_list:
-                print(stations_list.index(station))
+                print(stations_list.index(station),'/',len(stations_list))
                 print(f'Retrieving data for station: {station}')
                 try:
-                    data = self.get_measurements(station, startDate, endDate, variables)
+                    data = self.get_measurements(station, startDate, endDate, variables, dataset)
                     agg_data = self.aggregate_variables(data)
                     df_stats.append(agg_data)
                 except Exception as e:
@@ -445,7 +481,6 @@ class retreive_data:
                 df.to_csv(f'{csv_file}.csv')
                 return df
 
-        
         else:
             raise ValueError('Pass in a list')
         
@@ -493,13 +528,202 @@ class retreive_data:
                 df.to_csv(f'{csv_file}.csv')
                 return df.reindex(sorted(df.columns),axis=1) #sorted dataframe
 
+'''
+A specific class to evaluate and validate the water level data using TAHMO Stations
+To be used as it is to maintain flow
+'''
+class pipeline(retreive_data):
+    # inherit from retrieve_data class
+    def __init__(self, apiKey, apiSecret, api_key):
+        super().__init__(apiKey, apiSecret, api_key)
+
+    
+    # given the radius and the longitude and latitude of the gauging station, return the stations within
+    def stations_within_radius(self, radius, latitude, longitude, df=False):
+        """
+    Retrieves stations within a specified radius from a given latitude and longitude.
+
+    Parameters:
+    -----------
+    - radius (float): Radius (in kilometers) within which to search for stations.
+    - latitude (float): Latitude of the center point.
+    - longitude (float): Longitude of the center point.
+    - df (bool, optional): Flag indicating whether to return the result as a DataFrame. Defaults to False.
+
+    Returns:
+    - DataFrame or list: DataFrame or list containing the stations within the specified radius. If df is True, a DataFrame is returned with the columns 'code', 'location.latitude', 'location.longitude', and 'distance'. If df is False, a list of station codes is returned.
+
+    """
+        stations  = super().get_stations_info()
+        stations['distance'] = stations.apply(lambda row: hs.haversine((latitude, longitude), (row['location.latitude'], row['location.longitude'])), axis=1)
+        infostations = stations[['code', 'location.latitude','location.longitude', 'distance']].sort_values('distance')
+        if df:
+            return infostations[infostations['distance'] <= radius]
+        else:
+            return infostations[infostations['distance'] <= radius].code.values
         
+        
+    def stations_data_check(self, stations_list, percentage=1, start_date=None, end_date=None, data=None, variables=['pr'], csv_file=None):
+        """
+        Performs a data check on the stations' data and returns the stations with a percentage of missing data below a threshold.
+
+        Parameters:
+        -----------
+        - stations_list (list): List of station names or IDs.
+        - percentage (float, optional): Threshold percentage of missing data. Defaults to 1 (i.e., 100% missing data allowed).
+        - start_date (str, optional): Start date for the data range in the format 'YYYY-MM-DD'. Defaults to None.
+        - end_date (str, optional): End date for the data range in the format 'YYYY-MM-DD'. Defaults to None.
+        - data (DataFrame, optional): Preloaded data for the stations. Defaults to None.
+        - variables (list, optional): List of variables to consider for the data check. Defaults to ['pr'].
+        - csv_file (str, optional): File name for saving the data as a CSV file. Defaults to None.
+
+        Returns:
+        -----------
+        - DataFrame: DataFrame containing the stations' data with less than the specified percentage of missing data.
+
+        """
+        if data is None:
+            data = super().multiple_measurements(stations_list, startDate=start_date, endDate=end_date, variables=variables, csv_file=csv_file)
+
+        # Check the percentage of missing data and return the stations with less than the percentage of missing data
+        data.index = data.index.astype('datetime64[ns]')
+        data = data.dropna(axis=1, thresh=int(len(data) * percentage))
+        data.to_csv(f'{csv_file}.csv')
+        return data
+    
+    def stations_lag(self, weather_stations_df, gauging_stations_df, gauging_station_columns, date=None, lag=3, above=False, below=False):
+        """
+        Calculates the lag between weather station data and gauging station data.
+
+        Parameters:
+        -----------
+        - weather_stations_df (DataFrame): DataFrame containing weather station data.
+        - gauging_stations_df (DataFrame): DataFrame containing gauging station data.
+        - gauging_station_columns (list): List of columns in the gauging_stations_df DataFrame to consider for lag calculation.
+        - date (str, optional): Start date for the analysis in the format 'dd/mm/yyyy'. Defaults to None, which takes the first date from gauging_stations_df.
+        - lag (int, optional): The lag value to consider for the correlation analysis. Defaults to 3.
+        - above (bool, optional): Flag indicating whether to return lag results for correlations above the threshold. Defaults to False.
+        - below (bool, optional): Flag indicating whether to return lag results for correlations below the threshold. Defaults to False.
+
+        Returns:
+        -----------
+        - dict or tuple: Dictionary or tuple containing the lag results, depending on the above and below flags. The dictionary has the following structure:
+                {
+                    'column_name': {
+                        'lag': lag_value,
+                        'coefficient': correlation_coefficient,
+                        'coefficient_list': list of correlation coefficients,
+                        'select_list': list of values from weather station data,
+                        'water_list': list of values from gauging station data
+                    },
+                    ...
+                }
+        - If both above and below flags are True, a tuple containing two dictionaries is returned: (above_thresh_lag, below_thresh_lag).
+
+        """
+        
+        if date is None:
+            date = gauging_stations_df.loc[0, gauging_station_columns[0]]
+        start_date = datetime.datetime.strptime(date, "%d/%m/%Y")
+        end_date = start_date + datetime.timedelta(len(gauging_stations_df)-1)
+        # get the ddataframe from start date to end date
+        df_fit = weather_stations_df[start_date:end_date]
+        # get the water data list
+        water_list = list(gauging_stations_df[f'{gauging_station_columns[1]}'])
+        above_thresh_lag = dict()
+        below_thresh_lag = dict()
+        # get the lag for every column against the water data 
+        for cols in df_fit.columns:
+            select_list = list(df_fit[cols])
+            coefficient_list = list(sm.tsa.stattools.ccf(select_list,water_list, adjusted=False))
+            a = np.argmax(coefficient_list)
+            b = coefficient_list[a]
+            if a > lag:
+                above_thresh_lag[cols] = {
+                    'lag': a,
+                    'coefficient': b,
+                    'coefficient_list': coefficient_list,
+                    'select_list': select_list,
+                    'water_list' : water_list
+                }
+            else:
+                below_thresh_lag[cols] = {
+                    'lag': a,
+                    'coefficient': b,
+                    'coefficient_list': coefficient_list,
+                    'select_list': select_list,
+                    'water_list' : water_list
+                }
+        if above and below:
+            return above_thresh_lag, below_thresh_lag
+        elif above:
+            return above_thresh_lag
+        elif below:
+            return below_thresh_lag
+        
+        
+    def plot_figs(self, weather_stations, water_list, threshold_list, save=False, dpi=500, date='11-02-2021'):
+        """
+        Plots figures showing the relationship between rainfall and water level/stage against time.
+
+        Parameters:
+        -----------
+        - weather_stations (DataFrame): DataFrame containing weather station data.
+        - water_list (list): List of water levels/stages.
+        - threshold_list (list): List of columns in the weather_stations DataFrame to plot.
+        - save (bool, optional): Flag indicating whether to save the figures as PNG files. Defaults to False.
+        - dpi (int, optional): Dots per inch for saving the figures. Defaults to 500.
+        - date (str, optional): Start date for plotting in the format 'dd-mm-yyyy'. Defaults to '11-02-2021'.
+
+        Returns:
+        -----------
+        - Displays the images of the plots. and if save is set to true saves the images in the current directory.
+
+        """
+        start_date = datetime.datetime.strptime(date, "%d-%m-%Y")
+        end_date = start_date + datetime.timedelta(len(water_list)-1)
+        # weather_stations = weather_stations.set_index('Date')
+        df_plot = weather_stations[start_date:end_date]
+        df_plot = df_plot[threshold_list].reset_index()
+        df_plot.rename(columns={'index':'Date'}, inplace=True)
+        
+        
+        plt.rcParams['figure.figsize'] = (15, 9)
+        print('Begin plotting!')
+        
+        for cols in df_plot.columns[1:]:
+            fig, ax1 = plt.subplots()
+            color = 'tab:blue'
+            ax1.set_xlabel(f'Time', fontsize=24, weight='bold')
+            ax1.set_ylabel(f'Rainfall {cols} (mm)', color=color, fontsize=24, weight='bold')
+            ax1.bar(pd.to_datetime(df_plot['Date'], format="%d/%m/%Y"), df_plot[f'{cols}'], color=color, width=4, alpha=1.0)
+            ax1.tick_params(axis='y', labelcolor=color, labelsize=24)
+            ax1.tick_params(axis='x')
+            ax1.set_xticklabels(df_plot['Date'], fontsize=21, weight='bold')
+            ax1.grid(color='gray', linestyle='--', linewidth=0.8)
+            ax1.set(facecolor="white")
+            ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
+
+            color = 'tab:red'
+            ax2.set_ylabel('Water level/Stage (m)', color=color, fontsize=24, weight='bold')
+            ax2.plot(pd.to_datetime(df_plot['Date'], format="%d/%m/%Y"), water_list, color=color, linewidth=4)
+            ax2.tick_params(axis='y', labelcolor=color, labelsize=24)
+            ax2.set(facecolor="white")
+            plt.title('Stage and Rainfall against Time', fontsize=22, weight='bold')
+
+            date_form = DateFormatter("%m-%y")
+            ax1.xaxis.set_major_formatter(date_form)
+            fig.tight_layout()
+
+            if save:
+                fig.savefig(f'{cols}.png', dpi=dpi)
+
 
 # Move the functions to a class
-class Filter(retreive_data):
+class Filter(pipeline):
     # inherit from retrieve_data class
-    def __init__(self, apiKey, apiSecret):
-        super().__init__(apiKey, apiSecret)
+    def __init__(self, apiKey, apiSecret, api_key):
+        super().__init__(apiKey, apiSecret, api_key)
     
     def get_stations_info(self, station=None, multipleStations=[], countrycode=None):
         return super().get_stations_info(station, multipleStations, countrycode)
@@ -507,21 +731,38 @@ class Filter(retreive_data):
     # Get the centre point of the address
     def centre_point(self, address):
         """
-        This method retrieves the latitude and longitude coordinates of a given address using the Nominatim API.
+        This method retrieves the latitude and longitude coordinates of a given address using the Google Maps Geocoding API.
         
         Parameters:
         -----------
         - address : str
             The address of the location you want to retrieve the coordinates for.
-            
+        - api_key : str
+            Your Google Maps Geocoding API key.
+                
         Returns:
         --------
-        - Tuple (float, float)
-            The latitude and longitude coordinates of the location.
+        - Tuple (float, float) or None
+            The latitude and longitude coordinates of the location if found, or None if the address is not found.
         """
-        url = 'https://nominatim.openstreetmap.org/search/' + urllib.parse.quote(address) +'?format=json'
-        return requests.get(url).json()[0]['lat'], requests.get(url).json()[0]['lon']
-
+        base_url = 'https://maps.googleapis.com/maps/api/geocode/json'
+        params = {
+            'address': address,
+            'key': self.api_key,
+        }
+        
+        response = requests.get(base_url, params=params)
+        data = response.json()
+        
+        if response.status_code == 200 and data.get('results'):
+            # If the request was successful and results were found
+            location = data['results'][0]['geometry']['location']
+            return location['lat'], location['lng']
+        else:
+            # If the address is not found or there was an error
+            print(f"Error while accessing Google Maps Geocoding API: {data.get('error_message', 'Unknown Error')}")
+            return None
+        
     # Get the new radius of the address
     def calculate_new_point(self, lat, lon, distance, bearing):
         """
@@ -592,7 +833,7 @@ class Filter(retreive_data):
     # Get the minimum and maximum latitude and longitude of the address
 
 
-    def filter_stations(self, address, distance, startDate=None, endDate=None, csvfile='KEcheck3.csv'):
+    def filter_stations(self, address, distance, startDate=None, endDate=None, csvfile='pr_clog_flags.csv'):
         """
         This method filters weather station data within a certain distance from a given address.
         
@@ -607,18 +848,21 @@ class Filter(retreive_data):
         Returns:
         -----------
         - pandas.DataFrame: The filtered weather station data within the bounding box.
-        """     
-        lat, lon = self.centre_point(address)
-        min_lat, min_lon, max_lat, max_lon = self.compute_filter(float(lat), float(lon), distance)
-        stations = super().get_stations_info()
-        bounds = list(stations['code'][(stations['location.longitude'] >= min_lon)
-                                        & (stations['location.longitude'] <= max_lon)
-                                        & (stations['location.latitude'] >= min_lat)
-                                            & (stations['location.latitude'] <= max_lat)])
+        """   
+        centre = self.centre_point(address)
+        lat, lon = float(centre[0]), float(centre[1])  
+        stations = super().stations_within_radius(distance, lat, lon, df=False)
+        # lat, lon = self.centre_point(address)
+        # min_lat, min_lon, max_lat, max_lon = self.compute_filter(float(lat), float(lon), distance)
+        # stations = super().get_stations_info()
+        # bounds = list(stations['code'][(stations['location.longitude'] >= min_lon)
+        #                                 & (stations['location.longitude'] <= max_lon)
+        #                                 & (stations['location.latitude'] >= min_lat)
+        #                                     & (stations['location.latitude'] <= max_lat)])
         
         # read the csv file
         ke_chec = pd.read_csv(csvfile)
-        ke_chec.Date = ke_chec.Date.astype('datetime64')
+        ke_chec.Date = ke_chec.Date.astype('datetime64[ns]')
         # print(ke_chec.info())
 
         # ke_chec = ke_chec.set_index('Date')
@@ -630,10 +874,10 @@ class Filter(retreive_data):
             ke_chec = ke_chec.iloc[begin:end+1]
             ke_chec = ke_chec.set_index('Date')
 
-            return ke_chec[[col for bbox in bounds for col in ke_chec if bbox in col]]
+            return ke_chec[[i for i in ke_chec.columns if i.split('_')[0] in stations]]
         else:
             ke_chec = ke_chec.set_index('Date')
-            return ke_chec[[col for bbox in bounds for col in ke_chec if bbox in col]]
+            return ke_chec[[i for i in ke_chec.columns if i.split('_')[0] in stations]]
 
 
     # A list of filtered stations
@@ -749,8 +993,8 @@ class Filter(retreive_data):
 # A different class for visualisations
 class Interactive_maps(retreive_data):
     # inherit from retrieve_data class
-    def __init__(self, apiKey, apiSecret):
-        super().__init__(apiKey, apiSecret)
+    def __init__(self, apiKey, apiSecret, api_key):
+        super().__init__(apiKey, apiSecret, api_key)
 
     def draw_map(self, map_center):
         """
@@ -788,7 +1032,7 @@ class Interactive_maps(retreive_data):
 
         Parameters:
         -----------
-        - data (DataFrame): A pandas DataFrame containing station data defaults to none reads KEcheck3 if none.
+        - data (DataFrame): A pandas DataFrame containing station data defaults to none reads pr_clog_flags if none.
         - sensors (list): A list of valid sensor names.
         - day (int): The starting day of the animation (default is 100).
         - T (int): The range of days for the animation (default is 10).
@@ -799,7 +1043,7 @@ class Interactive_maps(retreive_data):
         - HTML: An HTML object containing the animation.
         '''
         if not data:
-            data = pd.read_csv('KEcheck3.csv')
+            data = pd.read_csv('pr_clog_flags.csv')
             data['Date'] = pd.to_datetime(data['Date'])
             data = data.loc[(data['Date'] >= start_date) & (data['Date'] <= end_date)]
 
@@ -938,7 +1182,7 @@ class Interactive_maps(retreive_data):
 
 
 
-    def get_map(self, subset_list, start_date=None, end_date=None, data_values=False, csv_file='KEcheck3.csv', min_zoom=8, max_zoom=11, width=2000, height=2000, png_resolution=300):
+    def get_map(self, subset_list, start_date=None, end_date=None, data_values=False, csv_file='pr_clog_flags.csv', min_zoom=8, max_zoom=11, width=2000, height=2000, png_resolution=300):
         """
         Creates a Folium map showing the locations of the weather stations in the given subsets.
 
@@ -953,7 +1197,7 @@ class Interactive_maps(retreive_data):
         - data_values : bool, optional
             If True, the map markers will display a plot of rainfall data, default is False.
         - csv_file : str, optional
-            The name of the CSV file containing the rainfall data, default is 'KEcheck3.csv'.
+            The name of the CSV file containing the rainfall data, default is 'pr_clog_flags.csv'.
         - min_zoom : int, optional
             The minimum zoom level of the map, default is 8.
         - max_zoom : int, optional
@@ -1016,12 +1260,73 @@ class Interactive_maps(retreive_data):
         
         # display the map
         return my_map
+    
+
+
+# From the loaded data on the jobs scored, format the data
+class transform_data:
+    # inherit from retrieve_data class
+    def __init__(self, apiKey, apiSecret, api_key):
+        super().__init__(apiKey, apiSecret, api_key)
+
+    # transform the station status data
+    def transform_station_status(self, station_status, today=datetime.date.today(), transformed_data=True):
+        """
+        Transforms the station status data into a dictionary with date as the key and online status as the value.
+
+        Parameters:
+        ----------
+        - station_status (DataFrame): The original DataFrame containing 'id' and 'status' of the stations.
+        - today (datetime.date, optional): The date to be used as the index when the job is run. Default is the current date.
+        - transformed_data (bool, optional): If True, the data will be transposed and formatted. If False, the original DataFrame will be used with an additional 'Date' column. Default is True.
+
+        Returns:
+        -------
+        - dict: A dictionary containing the transformed station status data.
+            
+        Note:
+        -----
+        - If transformed_data is True:
+                The returned dictionary will have the date (today) as the key and the number of stations online for that day as the value.
+                Example: {datetime.date(2023, 7, 29): {1: True, 2: False, 3: True}}
+            
+        - If transformed_data is False:
+                The returned dictionary will have each row of the original DataFrame with an additional 'Date' column.
+                Example: {0: {'id': 1, 'online': True, 'Date': datetime.date(2023, 7, 29)},
+                        1: {'id': 2, 'online': False, 'Date': datetime.date(2023, 7, 29)},
+                        2: {'id': 3, 'online': True, 'Date': datetime.date(2023, 7, 29)}}
+        """
+        # the time of the data to be in the index when the job is run
+        if not isinstance(today, datetime.date):
+            raise TypeError(f"Expected datetime.date but got {type(today)} instead.")
+        # today = datetime.date.today()
+        
+        if transformed_data:
+            # get the station status data
+            status_transposed = station_status[['id', 'online']].T
+            status_transposed.columns = status_transposed.loc['id']
+
+            # Drop the first row (which was the 'id' column) to make it a proper DataFrame
+            status_transposed = status_transposed.drop('id')
+
+            # Convert the index to a datetime index
+            status_transposed.index = pd.to_datetime([today])
+
+            # rename the index to date
+            status_transposed.index.names = ['Date']
+            return status_transposed.to_dict()
+        else:
+            station_status['Date'] = pd.to_datetime([today])
+            return station_status.to_dict()
+    
+
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Locating the different stations')
 
     parser.add_argument('--address', type=str, required=True, help='Write the address to filter the stations')
-    parser.add_argument('--csvfile', default='KEcheck3.csv', type=str, help='File to be filtered from default KEcheck3.csv')
+    parser.add_argument('--csvfile', default='pr_clog_flags.csv', type=str, help='File to be filtered from default pr_clog_flags.csv')
 
     return parser.parse_args()
 

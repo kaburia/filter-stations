@@ -1,0 +1,22 @@
+# Ignore build artifacts
+/build/
+/dist/
+
+# build docs
+/docs/
+
+# ignore pycache
+__pycache__/
+filter_stations/__pycache__/
+
+# ignore .egg-info
+*.egg-info/
+
+# Ignore log files
+*.log
+
+# Ignore temporary files
+*.tmp
+
+# Ignore cache directories
+**/cache/

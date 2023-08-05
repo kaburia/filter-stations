@@ -32,7 +32,8 @@ endpoints = {'VARIABLES': 'services/assets/v2/variables', # 28 different variabl
              'STATION_INFO': 'services/assets/v2/stations',
              'WEATHER_DATA': 'services/measurements/v2/stations', # Configured before requesting
              'DATA_COMPLETE': 'custom/sensordx/latestmeasurements',
-             'STATION_STATUS': 'custom/stations/status'}
+             'STATION_STATUS': 'custom/stations/status',
+             'QUALITY_OBJECTS': 'custom/sensordx/reports'}
 
 # authentication class
 
@@ -40,9 +41,10 @@ endpoints = {'VARIABLES': 'services/assets/v2/variables', # 28 different variabl
 # Get data class
 class retreive_data:
     # initialize the class
-    def __init__(self, apiKey, apiSecret):
+    def __init__(self, apiKey, apiSecret, api_key):
         self.apiKey = apiKey
         self.apiSecret = apiSecret
+        self.api_key = api_key
 
     def __handleApiError(self, apiRequest):
         json =None
@@ -189,6 +191,9 @@ class retreive_data:
                 return 0
         station_status['online'] = station_status.apply(active, axis=1)
         return station_status
+    
+    # get the qc flags
+    # def qc_flags(self, station, startDate=None, endDate=None, variables=None):
 
     
     # trained models in stored in mongoDB
@@ -529,8 +534,9 @@ To be used as it is to maintain flow
 '''
 class pipeline(retreive_data):
     # inherit from retrieve_data class
-    def __init__(self, apiKey, apiSecret):
-        super().__init__(apiKey, apiSecret)
+    def __init__(self, apiKey, apiSecret, api_key):
+        super().__init__(apiKey, apiSecret, api_key)
+
     
     # given the radius and the longitude and latitude of the gauging station, return the stations within
     def stations_within_radius(self, radius, latitude, longitude, df=False):
@@ -716,8 +722,8 @@ class pipeline(retreive_data):
 # Move the functions to a class
 class Filter(pipeline):
     # inherit from retrieve_data class
-    def __init__(self, apiKey, apiSecret):
-        super().__init__(apiKey, apiSecret)
+    def __init__(self, apiKey, apiSecret, api_key):
+        super().__init__(apiKey, apiSecret, api_key)
     
     def get_stations_info(self, station=None, multipleStations=[], countrycode=None):
         return super().get_stations_info(station, multipleStations, countrycode)
@@ -725,21 +731,38 @@ class Filter(pipeline):
     # Get the centre point of the address
     def centre_point(self, address):
         """
-        This method retrieves the latitude and longitude coordinates of a given address using the Nominatim API.
+        This method retrieves the latitude and longitude coordinates of a given address using the Google Maps Geocoding API.
         
         Parameters:
         -----------
         - address : str
             The address of the location you want to retrieve the coordinates for.
-            
+        - api_key : str
+            Your Google Maps Geocoding API key.
+                
         Returns:
         --------
-        - Tuple (float, float)
-            The latitude and longitude coordinates of the location.
+        - Tuple (float, float) or None
+            The latitude and longitude coordinates of the location if found, or None if the address is not found.
         """
-        url = 'https://nominatim.openstreetmap.org/search/' + urllib.parse.quote(address) +'?format=json'
-        return requests.get(url).json()[0]['lat'], requests.get(url).json()[0]['lon']
-
+        base_url = 'https://maps.googleapis.com/maps/api/geocode/json'
+        params = {
+            'address': address,
+            'key': self.api_key,
+        }
+        
+        response = requests.get(base_url, params=params)
+        data = response.json()
+        
+        if response.status_code == 200 and data.get('results'):
+            # If the request was successful and results were found
+            location = data['results'][0]['geometry']['location']
+            return location['lat'], location['lng']
+        else:
+            # If the address is not found or there was an error
+            print(f"Error while accessing Google Maps Geocoding API: {data.get('error_message', 'Unknown Error')}")
+            return None
+        
     # Get the new radius of the address
     def calculate_new_point(self, lat, lon, distance, bearing):
         """
@@ -970,8 +993,8 @@ class Filter(pipeline):
 # A different class for visualisations
 class Interactive_maps(retreive_data):
     # inherit from retrieve_data class
-    def __init__(self, apiKey, apiSecret):
-        super().__init__(apiKey, apiSecret)
+    def __init__(self, apiKey, apiSecret, api_key):
+        super().__init__(apiKey, apiSecret, api_key)
 
     def draw_map(self, map_center):
         """
@@ -1243,13 +1266,40 @@ class Interactive_maps(retreive_data):
 # From the loaded data on the jobs scored, format the data
 class transform_data:
     # inherit from retrieve_data class
-    def __init__(self, apiKey, apiSecret):
-        super().__init__(apiKey, apiSecret)
+    def __init__(self, apiKey, apiSecret, api_key):
+        super().__init__(apiKey, apiSecret, api_key)
 
     # transform the station status data
-    def transform_station_status(self, station_status, transformed_data=True):
+    def transform_station_status(self, station_status, today=datetime.date.today(), transformed_data=True):
+        """
+        Transforms the station status data into a dictionary with date as the key and online status as the value.
+
+        Parameters:
+        ----------
+        - station_status (DataFrame): The original DataFrame containing 'id' and 'status' of the stations.
+        - today (datetime.date, optional): The date to be used as the index when the job is run. Default is the current date.
+        - transformed_data (bool, optional): If True, the data will be transposed and formatted. If False, the original DataFrame will be used with an additional 'Date' column. Default is True.
+
+        Returns:
+        -------
+        - dict: A dictionary containing the transformed station status data.
+            
+        Note:
+        -----
+        - If transformed_data is True:
+                The returned dictionary will have the date (today) as the key and the number of stations online for that day as the value.
+                Example: {datetime.date(2023, 7, 29): {1: True, 2: False, 3: True}}
+            
+        - If transformed_data is False:
+                The returned dictionary will have each row of the original DataFrame with an additional 'Date' column.
+                Example: {0: {'id': 1, 'online': True, 'Date': datetime.date(2023, 7, 29)},
+                        1: {'id': 2, 'online': False, 'Date': datetime.date(2023, 7, 29)},
+                        2: {'id': 3, 'online': True, 'Date': datetime.date(2023, 7, 29)}}
+        """
         # the time of the data to be in the index when the job is run
-        today = datetime.date.today()
+        if not isinstance(today, datetime.date):
+            raise TypeError(f"Expected datetime.date but got {type(today)} instead.")
+        # today = datetime.date.today()
         
         if transformed_data:
             # get the station status data
@@ -1269,8 +1319,6 @@ class transform_data:
             station_status['Date'] = pd.to_datetime([today])
             return station_status.to_dict()
     
-    
-
 
 
 
