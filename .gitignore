@@ -1,0 +1,13 @@
+# Ignore build artifacts
+/filter_stations/build/
+/filter_stations/dist/
+
+# build docs
+/filter_stations/docs/
+
+# ignore pycache
+/filter_stations/__pycache__/
+/filter_stations/__pycache__/filter_stations/__pycache__/
+
+# ignore .egg-info
+/filter_stations/filter_stations.egg-info/
