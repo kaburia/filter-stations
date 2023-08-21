@@ -20,6 +20,8 @@ import gc
 from math import ceil
 import statsmodels.api as sm
 from matplotlib.dates import DateFormatter
+from tqdm.auto import tqdm
+
 import warnings
 warnings. filterwarnings('ignore')
 
@@ -58,7 +60,7 @@ class retreive_data:
                 raise Exception(f'API request failed with status code {apiRequest.status_code}')
 
     def __request(self, endpoint, params):
-        print(f'API request: {endpoint}')
+        # print(f'API request: {endpoint}')
         apiRequest = requests.get(f'{API_BASE_URL}/{endpoint}',
                                     params=params,
                                     auth=requests.auth.HTTPBasicAuth(
@@ -438,7 +440,7 @@ class retreive_data:
                     return df
     
     # retrieve data from multiple at a time
-    def multiple_measurements(self, stations_list, csv_file, startDate, endDate, variables, dataset='controlled'):
+    def multiple_measurements(self, stations_list, csv_file, startDate, endDate, variables, dataset='controlled', aggregate=True):
         """
         Retrieves measurements for multiple stations and saves the aggregated data to a CSV file.
 
@@ -463,13 +465,16 @@ class retreive_data:
         if isinstance(stations_list, list):
             df_stats = []
             
-            for station in stations_list:
-                print(stations_list.index(station),'/',len(stations_list))
-                print(f'Retrieving data for station: {station}')
+            for station in tqdm(stations_list,
+                            desc='Retrieving data for stations',
+                            total=len(stations_list),
+                            leave=True):
+                # print(stations_list.index(station)+1,'/',len(stations_list))
+                # print(f'Retrieving data for station: {station}')
                 try:
-                    data = self.get_measurements(station, startDate, endDate, variables, dataset)
-                    agg_data = self.aggregate_variables(data)
-                    df_stats.append(agg_data)
+                    data = self.get_measurements(station, startDate, endDate, variables, dataset, aggregate)
+                    # agg_data = self.aggregate_variables(data)
+                    df_stats.append(data)
                 except Exception as e:
                     error_dict[station] = f'{e}'
             

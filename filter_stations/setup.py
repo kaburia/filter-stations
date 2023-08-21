@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='filter_stations',
-    version='0.3.17',
+    version='0.3.20',
     packages=find_packages(),
     include_package_data=True,
     description='Making it easier to navigate and clean station data',
@@ -23,7 +23,8 @@ setup(
         'IPython',
         'folium',
         'datetime',
-        'statsmodels'
+        'statsmodels',
+        'tqdm'
     ],
     entry_points={
         'console_scripts': [
