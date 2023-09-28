@@ -596,76 +596,111 @@ class pipeline(retreive_data):
         data.to_csv(f'{csv_file}.csv')
         return data
     
-    def stations_lag(self, weather_stations_df, gauging_stations_df, gauging_station_columns, date=None, lag=3, above=False, below=False):
+    def calculate_lag(self, weather_stations_data, water_level_data, lag=3, above=None, below=None):
         """
-        Calculates the lag between weather station data and gauging station data.
+        Calculates the lag and coefficient of correlation between weather station data
+        and water level data, identifying stations with positive correlations.
 
         Parameters:
-        -----------
-        - weather_stations_df (DataFrame): DataFrame containing weather station data.
-        - gauging_stations_df (DataFrame): DataFrame containing gauging station data.
-        - gauging_station_columns (list): List of columns in the gauging_stations_df DataFrame to consider for lag calculation.
-        - date (str, optional): Start date for the analysis in the format 'dd/mm/yyyy'. Defaults to None, which takes the first date from gauging_stations_df.
-        - lag (int, optional): The lag value to consider for the correlation analysis. Defaults to 3.
-        - above (bool, optional): Flag indicating whether to return lag results for correlations above the threshold. Defaults to False.
-        - below (bool, optional): Flag indicating whether to return lag results for correlations below the threshold. Defaults to False.
+        ------------
+        - weather_stations_data (DataFrame): A DataFrame containing weather
+        station data columns for analysis.
+        - water_level_data (Series): A time series of water level data used for
+        correlation analysis.
+        - lag (int): The maximum lag, in hours, to consider for correlation.
+        Default is 3 hours.
+        - above (float or None): If specified, stations with correlations and lags
+        above this threshold are identified.
+        - below (float or None): If specified, stations with correlations and lags
+        below this threshold are identified.
 
         Returns:
-        -----------
-        - dict or tuple: Dictionary or tuple containing the lag results, depending on the above and below flags. The dictionary has the following structure:
-                {
-                    'column_name': {
-                        'lag': lag_value,
-                        'coefficient': correlation_coefficient,
-                        'coefficient_list': list of correlation coefficients,
-                        'select_list': list of values from weather station data,
-                        'water_list': list of values from gauging station data
-                    },
-                    ...
-                }
-        - If both above and below flags are True, a tuple containing two dictionaries is returned: (above_thresh_lag, below_thresh_lag).
-
+        ------------
+        - above_threshold_lag (dict): A dictionary where keys represent weather station
+        column names, and values represent the lag in hours if positive correlation
+        exceeds the specified threshold (above).
+        - below_threshold_lag (dict): A dictionary where keys represent weather station
+        column names, and values represent the lag in hours if positive correlation
+        falls below the specified threshold (below).
         """
-        
-        if date is None:
-            date = gauging_stations_df.loc[0, gauging_station_columns[0]]
-        start_date = datetime.datetime.strptime(date, "%d/%m/%Y")
-        end_date = start_date + datetime.timedelta(len(gauging_stations_df)-1)
-        # get the ddataframe from start date to end date
-        df_fit = weather_stations_df[start_date:end_date]
-        # get the water data list
-        water_list = list(gauging_stations_df[f'{gauging_station_columns[1]}'])
-        above_thresh_lag = dict()
-        below_thresh_lag = dict()
-        # get the lag for every column against the water data 
-        for cols in df_fit.columns:
-            select_list = list(df_fit[cols])
-            coefficient_list = list(sm.tsa.stattools.ccf(select_list,water_list, adjusted=False))
+        above_threshold_lag = dict()
+        below_threshold_lag = dict()
+        for cols in weather_stations_data.columns:
+            # check for positive correlation if not skip the column
+            if weather_stations_data[cols].corr(water_level_data['water_level']) <= 0:
+                continue
+            # get the lag and the coefficient for columns with a positive correlation
+            coefficient_list = list(sm.tsa.stattools.ccf(weather_stations_data[cols], water_level_data['water_level']))    
             a = np.argmax(coefficient_list)
-            b = coefficient_list[a]
+            b = coefficient_list[a] 
+            # print(f'{cols} has a lag of {a}')
+            # print(f'{cols} has a coefficient of {b}')
+            # print('-----------------------')
             if a > lag:
-                above_thresh_lag[cols] = {
-                    'lag': a,
-                    'coefficient': b,
-                    'coefficient_list': coefficient_list,
-                    'select_list': select_list,
-                    'water_list' : water_list
-                }
-            else:
-                below_thresh_lag[cols] = {
-                    'lag': a,
-                    'coefficient': b,
-                    'coefficient_list': coefficient_list,
-                    'select_list': select_list,
-                    'water_list' : water_list
-                }
-        if above and below:
-            return above_thresh_lag, below_thresh_lag
-        elif above:
-            return above_thresh_lag
+                above_threshold_lag[cols] = a
+            elif a <= lag:
+                below_threshold_lag[cols] = a
+        if above:
+            return above_threshold_lag
         elif below:
-            return below_thresh_lag
+            return below_threshold_lag
+        else:
+            return above_threshold_lag, below_threshold_lag
         
+    def shed_stations(self, weather_stations_data, water_level_data,
+                        gauging_station_coords, radius, lag=3,
+                        percentage=1, above=None, below=None):
+        """
+        Filters and processes weather station data to identify stations
+        potentially contributing to water level changes above or below
+        specified thresholds.
+
+        Parameters:
+        ------------
+        - weather_stations_data (DataFrame): A DataFrame containing weather
+        station data over a specific date range.
+        - water_level_data (Series): A time series of water level data
+        corresponding to the same date range as weather_station_data.
+        - gauging_station_coords (tuple): A tuple containing latitude and
+        longitude coordinates of the gauging station.
+        - radius (float): The radius in kilometers for identifying nearby
+        weather stations.
+        - lag (int): The time lag, in hours, used for correlation analysis.
+        Default is 3 hours.
+        - percentage (float): The minimum percentage of valid data required
+        for a weather station to be considered. Default is 1 (100%).
+        - above (float or None): The threshold above which water level changes
+        are considered significant. If provided, stations contributing to
+        changes above this threshold are identified.
+        - below (float or None): The threshold below which water level changes
+        are considered significant. If provided, stations contributing to
+        changes below this threshold are identified.
+
+        Returns:
+        ------------
+        - above_threshold_lag (list): List of weather stations with
+            positive correlations and lagged changes above the specified threshold.
+        - below_threshold_lag (list): List of weather stations with
+            positive correlations and lagged changes below the specified threshold.
+        """
+        # Filter the date range based on the water level data from first day of the water level data to the last day of the water level data
+        weather_stations_data = weather_stations_data.loc[water_level_data.index[0]:water_level_data.index[-1]]
+        # Filter the weather stations based on the radius
+        lat, lon = gauging_station_coords[0], gauging_station_coords[1]
+        weather_stations_data_list = self.stations_within_radius(radius, lat, lon, df=False)
+        # get stations without missing data or the percentage of stations with missing data
+        weather_stations_data_filtered = self.stations_data_check(stations_list=weather_stations_data_list,
+                                                                percentage=percentage,
+                                                                data=weather_stations_data)
+        # Check the sum of each column and drop columns with a sum of zero this is if the sum of water level is not equal to zero
+        weather_stations_data_filtered = weather_stations_data_filtered.loc[:, weather_stations_data_filtered.sum() != 0]
+
+        # Filter the weather stations based on the lag and positive correlation
+        above_threshold_lag, below_threshold_lag = self.calculate_lag(weather_stations_data_filtered, 
+                                                                      water_level_data, lag=lag)
+
+        return above_threshold_lag, below_threshold_lag
+            
         
     def plot_figs(self, weather_stations, water_list, threshold_list, save=False, dpi=500, date='11-02-2021'):
         """
