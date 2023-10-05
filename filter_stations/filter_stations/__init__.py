@@ -22,6 +22,9 @@ import statsmodels.api as sm
 from matplotlib.dates import DateFormatter
 from tqdm.auto import tqdm
 import multiprocessing as mp
+import geopandas as gpd
+from matplotlib_scalebar.scalebar import ScaleBar
+from shapely.geometry import Point
 
 import warnings
 warnings. filterwarnings('ignore')
@@ -639,7 +642,7 @@ class pipeline(retreive_data):
         Parameters:
         -----------
         - stations_list (list): List of station names or IDs.
-        - percentage (float, optional): Threshold percentage of missing data. Defaults to 1 (i.e., 100% missing data allowed).
+        - percentage (float, optional): Threshold percentage of missing data. Defaults to 1 (i.e., 0% missing data allowed).
         - start_date (str, optional): Start date for the data range in the format 'YYYY-MM-DD'. Defaults to None.
         - end_date (str, optional): End date for the data range in the format 'YYYY-MM-DD'. Defaults to None.
         - data (DataFrame, optional): Preloaded data for the stations. Defaults to None.
@@ -782,6 +785,11 @@ class pipeline(retreive_data):
         Returns:
         -----------
         - Displays the images of the plots. and if save is set to true saves the images in the current directory.
+
+        
+        <div align="center">
+          <img src="water_level_pipeline_15_1.png" alt="Muringato" width="80%">
+        </div>
 
         """
         start_date = datetime.datetime.strptime(date, "%d-%m-%Y")
@@ -999,6 +1007,77 @@ class Filter(pipeline):
         - List of station codes that fall within the specified distance from the given address.
         """
         return list(set([i.split('_')[0] for i in self.filter_stations(f'{address}', distance).columns if i.split('_')[-1] != 'clogFlag']))
+    
+    def stations_region(self, region, plot=False):
+        """
+        Subsets weather stations by a specific geographical region and optionally plots them on a map with a scale bar.
+
+        Parameters:
+        -----------
+        region (str): The name of the region to subset stations from.
+        plot (bool, optional): If True, a map with stations and a scale bar is plotted. Default is False.
+
+        Returns:
+        -----------
+        list or None: If plot is False, returns a list of station codes in the specified region. Otherwise, returns None.
+
+        Usage:
+        -----------
+        To get a list of station codes in the 'Nairobi' region without plotting:
+        ```
+        fs = Filter(api_key, api_secret, maps_key)  # Create an instance of your class
+        station_list = fs.stations_region('Nairobi')
+        ```
+
+        To subset stations in the 'Nairobi' region and display them on a map with a scale bar:
+        ```
+        fs = Filter(api_key, api_secret, maps_key)  # Create an instance of your class
+        fs.stations_region('Nairobi', plot=True)
+        ```
+        <div align="center">
+          <img src="nairobi_region.png" alt="Nairobi Region Map" width="80%">
+        </div>
+        """
+        # read the map data from the shapefile the greater and smaller region
+        gdf_adm0 = gpd.read_file('geo\gadm41_KEN_1.shp')
+        gdf_adm3 = gpd.read_file('geo\gadm41_KEN_3.shp')
+        # get the stations metadata
+        stations = super().get_stations_info()[['code', 'location.latitude', 'location.longitude']]
+
+        # subset by the particular region
+        stations['test'] = stations.apply(lambda row: gdf_adm0[gdf_adm0.NAME_1 == f'{region}']
+                                        [['geometry']].contains(Point(row['location.longitude'], 
+                                                                        row['location.latitude'])), axis=1)
+        stations = stations[stations.test]
+        scale_factor = 432.16
+
+        # return the list of stations if plotting is false
+        if plot:
+            station_geometry = [Point(xy) for xy in zip(stations['location.longitude'], 
+                                                stations['location.latitude'])]
+
+            # Create a GeoDataFrame from the station data
+            station_gdf = gpd.GeoDataFrame(stations, 
+                                        geometry=station_geometry, 
+                                        crs=gdf_adm0.crs)
+            
+            fig, ax = plt.subplots(figsize=(10, 10))
+            gdf_adm3[gdf_adm3.NAME_1 == f'{region}'].plot(ax=ax, color='gray')
+            # if station_grid has no value
+            try:
+                station_gdf.plot(ax=ax, color='blue', marker='o', markersize=20)  # Adjust marker size as needed
+            except ValueError:
+                pass
+
+            # Add the scale bar using mplscale
+            ax.add_artist(ScaleBar(scale_factor, units='km', 
+                                location='lower right', 
+                                length_fraction=0.35))
+
+            plt.title(f'{region} region')
+            plt.show()
+        else:
+            return list(stations['code'])
 
     # get clogs for a certain duration based on quality objects file
     def clogs(self, startdate, enddate, flags_json='qualityobjects.json', as_csv=False, csv_file=None):

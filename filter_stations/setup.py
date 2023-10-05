@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='filter_stations',
-    version='0.4.3',
+    version='0.4.5',
     packages=find_packages(),
     include_package_data=True,
     description='Making it easier to navigate and clean station data',
@@ -24,7 +24,9 @@ setup(
         'folium',
         'datetime',
         'statsmodels',
-        'tqdm'
+        'tqdm',
+        'geopandas',
+        'matplotlib-scalebar'
     ],
     entry_points={
         'console_scripts': [
