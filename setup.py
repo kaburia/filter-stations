@@ -11,7 +11,7 @@ setup(
     description='Making it easier to navigate and clean TAHMO weather station data for ML development',
     author='Austin Kaburia',
     author_email='kaburiaaustin1@gmail.com',
-    url='https://github.com/kaburia/Packaging/tree/main/filter_stations',
+    url='https://github.com/kaburia/filter-stations',
     install_requires=[
         'pandas',
         'requests',
