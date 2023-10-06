@@ -5,10 +5,10 @@ with open("README.md", "r") as fh:
 
 setup(
     name='filter_stations',
-    version='0.4.5',
+    version='0.4.6',
     packages=find_packages(),
     include_package_data=True,
-    description='Making it easier to navigate and clean station data',
+    description='Making it easier to navigate and clean TAHMO weather station data for ML development',
     author='Austin Kaburia',
     author_email='kaburiaaustin1@gmail.com',
     url='https://github.com/kaburia/Packaging/tree/main/filter_stations',

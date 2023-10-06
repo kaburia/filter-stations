@@ -41,8 +41,8 @@ endpoints = {'VARIABLES': 'services/assets/v2/variables', # 28 different variabl
              'STATION_STATUS': 'custom/stations/status',
              'QUALITY_OBJECTS': 'custom/sensordx/reports'}
 
-# authentication class
-
+# module directory
+module_dir = os.path.dirname(__file__)
 
 # Get data class
 class retreive_data:
@@ -1014,12 +1014,12 @@ class Filter(pipeline):
 
         Parameters:
         -----------
-        region (str): The name of the region to subset stations from.
-        plot (bool, optional): If True, a map with stations and a scale bar is plotted. Default is False.
+        - region (str): The name of the region to subset stations from (47 Kenyan counties).
+        - plot (bool, optional): If True, a map with stations and a scale bar is plotted. Default is False.
 
         Returns:
         -----------
-        list or None: If plot is False, returns a list of station codes in the specified region. Otherwise, returns None.
+        - list or None: If plot is False, returns a list of station codes in the specified region. Otherwise, returns None.
 
         Usage:
         -----------
@@ -1038,9 +1038,15 @@ class Filter(pipeline):
           <img src="nairobi_region.png" alt="Nairobi Region Map" width="80%">
         </div>
         """
+        # Handle different ways of writing region
+        region = region.title()
+        
+        # get the path of the files
+        adm0_path = os.path.join(module_dir, 'geo', 'gadm41_KEN_1.shp')
+        adm3_path = os.path.join(module_dir, 'geo', 'gadm41_KEN_3.shp')
         # read the map data from the shapefile the greater and smaller region
-        gdf_adm0 = gpd.read_file('geo\gadm41_KEN_1.shp')
-        gdf_adm3 = gpd.read_file('geo\gadm41_KEN_3.shp')
+        gdf_adm0 = gpd.read_file(adm0_path)
+        gdf_adm3 = gpd.read_file(adm3_path)
         # get the stations metadata
         stations = super().get_stations_info()[['code', 'location.latitude', 'location.longitude']]
 
