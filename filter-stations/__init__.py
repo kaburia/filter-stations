@@ -1,3 +1,36 @@
+"""
+Installation
+------------
+To install the package, run the following command in your terminal:
+```bash
+pip install -U filter-stations
+```
+Getting Started
+---------------
+All methods require an API key and secret, which can be obtained by contacting TAHMO. <br>
+- The ```retreive_data``` class is used to retrieve data from the TAHMO API endpoints.<br> 
+- The ```Filter``` class is used to filter weather stations data based on things like distance and region.<br>
+- The ```pipeline``` class is used to create a pipeline of filters to apply to weather stations based on how they correlate with water level data.<br>
+- The ```Interactive_maps``` class is used to plot weather stations on an interactive map.<br>
+
+```python
+# Import the necessary modules
+from filter_stations import retreive_data, Filter, pipeline, Interactive_maps
+
+# Define the API key and secret
+apiKey = 'your_api_key' # request from TAHMO
+apiSecret = 'your_api_secret' # request from TAHMO
+maps_key = 'your_google_maps_key' # retrieve from google maps platform
+
+# Initialize the class
+ret = retreive_data(apiKey, apiSecret, maps_key)
+fs = Filter(apiKey, apiSecret, maps_key)
+pipe = pipeline(apiKey, apiSecret, maps_key)
+maps = Interactive_maps(apiKey, apiSecret, maps_key)
+```
+
+
+"""
 import requests
 import urllib.parse
 import pandas as pd
@@ -46,7 +79,6 @@ module_dir = os.path.dirname(__file__)
 
 # Get data class
 class retreive_data:
-    # initialize the class
     def __init__(self, apiKey, apiSecret, api_key):
         self.apiKey = apiKey
         self.apiSecret = apiSecret
@@ -90,6 +122,21 @@ class retreive_data:
         Returns:
         -----------
         - pandas.DataFrame: DataFrame containing information about the requested weather stations.
+
+        Usage:
+        -----------
+        To retrieve information about a single station:
+        ```python
+        station_info = ret.get_stations_info(station='TA00001')
+        ```
+        To retrieve information about multiple stations:
+        ```python
+        station_info = ret.get_stations_info(multipleStations=['TA00001', 'TA00002'])
+        ```
+        To retrieve information about all stations in a country:
+        ```python
+        station_info = ret.get_stations_info(countrycode='KE')
+        ```
 
         """
         # Make API request and convert response to DataFrame
@@ -147,9 +194,6 @@ class retreive_data:
         df.loc[0, 'start'] = pd.Timestamp(startDate)
         df['end'].iloc[-1] = pd.Timestamp(endDate)
         return df
-    
-    def raw_measurements(self, station, startDate=None, endDate=None, variables=None):
-        return self.get_measurements(station, startDate=startDate, endDate=endDate, variables=variables, dataset='raw')
     
     def k_neighbours(self, station, number=5):
         """
@@ -237,29 +281,57 @@ class retreive_data:
             return self.__handleApiError(apiRequest)     
         
     
-    def aggregate_variables(self, dataframe):
+    def aggregate_variables(self, dataframe, freq='1D'):
         """
         Aggregates a pandas DataFrame of weather variables by summing values across each day.
 
         Parameters:
         -----------
         - dataframe (pandas.DataFrame): DataFrame containing weather variable data.
+        - freq (str, optional): Frequency to aggregate the data by. Defaults to '1D'.
 
         Returns:
         -----------
         - pandas.DataFrame: DataFrame containing aggregated weather variable data, summed by day.
+        
+        Usage:
+        -----------
+        Define the DataFrame containing the weather variable data:
+        ```python
+        dataframe = ret.get_measurements('TA00001', '2020-01-01', '2020-01-31', ['pr']) # data comes in 5 minute interval
+        ```
+        To aggregate data hourly:
+        ```python
+        hourly_data = ret.aggregate_variables(dataframe, freq='1H')
+        ```
+        To aggregate data by 12 hours:
+        ```python
+        half_day_data = ret.aggregate_variables(dataframe, freq='12H')
+        ```
+        To aggregate data by day:
+        ```python
+        daily_data = ret.aggregate_variables(dataframe, freq='1D')
+        ```
+        To aggregate data by week:
+        ```python
+        weekly_data = ret.aggregate_variables(dataframe, freq='1W')
+        ```
+        To aggregate data by month:
+        ```python
+        monthly_data = ret.aggregate_variables(dataframe, freq='1M')
+        ```
         """
         dataframe = dataframe.reset_index()
         dataframe.rename(columns={'index':'Date'}, inplace=True)
         # check if the column is all nan
         if dataframe.iloc[:, 1].isnull().all():
                 return dataframe.groupby(pd.Grouper(key='Date', axis=0, 
-                                            freq='1D')).agg({f'{dataframe.columns[1]}': 
+                                            freq=freq)).agg({f'{dataframe.columns[1]}': 
                                                              lambda x: np.nan if x.isnull().all() 
                                                              else x.isnull().sum()})    
         else:
                 return dataframe.groupby(pd.Grouper(key='Date', axis=0, 
-                                            freq='1D')).sum()
+                                            freq=freq)).sum()
     
     # aggregate qualityflags
     def aggregate_qualityflags(self, dataframe):
@@ -285,7 +357,7 @@ class retreive_data:
 
     
     # Get the variables only
-    def get_measurements(self, station, startDate=None, endDate=None, variables=None, dataset='controlled', aggregate=False, quality_flags=False):
+    def get_measurements(self, station, startDate=None, endDate=None, variables=None, dataset='controlled', aggregate='5min', quality_flags=False):
             """
                 Get measurements from a station.
 
@@ -302,6 +374,36 @@ class retreive_data:
                 Returns:
                 -----------
                 - A DataFrame containing the measurements.
+
+                Usage:
+                -----------
+                To retrieve precipitation data for a station for the last month:
+                ```python
+                from datetime import datetime, timedelta
+
+                # Get today's date
+                today = datetime.now()
+
+                # Calculate one month ago
+                last_month = today - timedelta(days=30)
+
+                # Format date as a string
+                last_month_str = last_month.strftime('%Y-%m-%d')
+                today_str = today.strftime('%Y-%m-%d')
+
+                # Define the station you want to retrieve data from
+                station = 'TA00001'
+                variables = ['pr']
+                dataset = 'raw'
+                
+                # aggregate the data to 30 minutes interval
+                aggregate = '30min'
+
+                # Call the get_measurements method to retrieve and aggregate data
+                TA00001_data = ret.get_measurements(station, last_month_str, 
+                                                    today_str, variables, 
+                                                    dataset, aggregate)
+                ```                
 
             """         
             #print('Get measurements', station, startDate, endDate, variables)
@@ -422,8 +524,11 @@ class retreive_data:
             # Merge all series together.
             if len(series) > 0:
                 df = pd.concat(series, axis=1, sort=True)
+                
             else:
                 df = pd.DataFrame()
+            
+            
 
             # Clean up memory.
             del series
@@ -431,46 +536,80 @@ class retreive_data:
             # check if dataframe is empty
             if df.empty:
                 # add the date range in the dataframe and the column as the station filled with NaN
-                df = pd.DataFrame(index=pd.date_range(start=startDate, end=endDate, tz='UTC', freq='5min'), columns=[f'{station}'])
-            if quality_flags:
-                if aggregate:
-                    return self.aggregate_qualityflags(df)
-                else:
-                    return df
+                df = pd.DataFrame(index=pd.date_range(start=startDate, end=endDate, tz='UTC', freq=aggregate), columns=[f'{station}'])
+                # remove the last row
+                return df[:-1]
+           
             else:
-                if aggregate:
-                    return self.aggregate_variables(df)
-                else:
-                    return df
-    
-    # retrieve data from multiple at a time
-    def retrieve_data(self, station, startDate, endDate, variables, dataset, aggregate):
-            try:
-                data = self.get_measurements(station, startDate, endDate, variables, dataset, aggregate)
-                return data
-            except Exception as e:
-                return station, str(e)
+                # remove the last row 
+                df = df[:-1] # lacks values for the last day
+                return self.aggregate_variables(df, freq=aggregate)
 
-    def multiple_measurements(self, stations_list, csv_file, startDate, endDate, variables, dataset='controlled', aggregate=True):
+    def multiple_measurements(self, 
+                              stations_list, 
+                              startDate, 
+                              endDate, 
+                              variables, 
+                              dataset='controlled',
+                              csv_file=None, 
+                              aggregate='1D'):
         """
-        Retrieves measurements for multiple stations and saves the aggregated data to a CSV file.
+        Retrieves measurements for multiple stations within a specified date range.
 
         Parameters:
         -----------
-        - stations_list (list): A list of strings containing the names of the stations to retrieve data from.
-        - csv_file (str): The name of the CSV file to save the data to.
+        - stations_list (list): A list of strings containing the codes of the stations to retrieve data from.
         - startDate (str): The start date for the measurements, in the format 'yyyy-mm-dd'.
         - endDate (str): The end date for the measurements, in the format 'yyyy-mm-dd'.
         - variables (list): A list of strings containing the names of the variables to retrieve.
-        - dataset (str): The name of the dataset to retrieve the data from. Default is 'controlled'.
+        - dataset (str): The name of the database to retrieve the data from. Default is 'controlled' alternatively 'raw' database.
+        - csv_file (str, optional): pass the name of the csv file to save the data otherwise it will return the dataframe.
+        - aggregate (bool): If True, aggregate the data per day; otherwise, return data in 5 minute interval.
 
         Returns:
         -----------
         - df (pandas.DataFrame): A DataFrame containing the aggregated data for all stations.
 
         Raises:
+        -----------
+        - ValueError: If stations_list is not a list.
 
-            ValueError: If stations_list is not a list.
+        ### Example Usage:
+        To retrieve precipitation data for stations in Kenya for the last week and save it as a csv file:
+        ```python
+        # Import the necessary modules
+        from datetime import datetime, timedelta
+        from filter_stations import retreive_data
+
+        # An instance of the retreive_data class
+        ret = retreive_data(apiKey, apiSecret, maps_key)
+
+        # Get today's date
+        today = datetime.now()
+
+        # Calculate one week ago
+        last_week = today - timedelta(days=7)
+
+        # Format date as a string
+        last_week_str = last_week.strftime('%Y-%m-%d')
+        today_str = today.strftime('%Y-%m-%d')
+
+        # Define the list of stations you want to retrieve data from example stations in Kenya
+        stations = list(ret.get_stations_info(countrycode='KE')['code'])
+
+        # Get the precipitation data for the stations in the list
+        variables = ['pr']
+
+        # retrieve the raw data for the stations, aggregate the data and save it as a csv file
+        dataset = 'raw'
+        aggregate = '1D'
+        csv_file = 'Kenya_precipitation_data'
+
+        # Call the multiple_measurements method to retrieve and aggregate data
+        aggregated_data = ret.multiple_measurements(stations, last_week_str, 
+                                                    today_str, variables, 
+                                                    dataset, csv_file, aggregate)
+        ```
         """
         if not isinstance(stations_list, list):
             raise ValueError('Pass in a list')
@@ -482,7 +621,7 @@ class retreive_data:
             results = []
             with tqdm(total=len(stations_list), desc='Retrieving data for stations') as pbar:
                 for station in stations_list:
-                    results.append(pool.apply_async(self.retrieve_data, args=(station, startDate, endDate, variables, dataset, aggregate), callback=lambda _: pbar.update(1)))
+                    results.append(pool.apply_async(self.get_measurements, args=(station, startDate, endDate, variables, dataset, aggregate), callback=lambda _: pbar.update(1)))
 
                 pool.close()
                 pool.join()
@@ -491,8 +630,11 @@ class retreive_data:
 
             if len(df_stats) > 0:
                 df = pd.concat(df_stats, axis=1)
-                df.to_csv(f'{csv_file}.csv')
-                return df
+                if csv_file:
+                    df.to_csv(f'{csv_file}.csv')
+                    return df
+                else:
+                    return df
         except Exception as e:
             print(f"An error occurred: {e}")
         finally:
@@ -565,16 +707,16 @@ class retreive_data:
         Usage:
         -----------
         To retrieve anomaly reports for a specific date range:
-        ```
+        ```python
         start_date = '2023-01-01'
         end_date = '2023-01-31'
-        report_data = your_instance.anomalies_report(start_date, end_date)
+        report_data = ret.anomalies_report(start_date, end_date)
         ```
 
         To retrieve anomaly reports for a specific date:
         ```
         start_date = '2023-01-01'
-        report_data = your_instance.anomalies_report(start_date)
+        report_data = ret.anomalies_report(start_date)
         ```
         """
         reqUrl = "https://datahub.tahmo.org/custom/sensordx/reports" # endpoint
@@ -591,15 +733,123 @@ class retreive_data:
             anomalies_data = pd.DataFrame(apiRequest.json()['qualityObjects'])
             level_2 = anomalies_data[(anomalies_data.level == 2) & (anomalies_data.type == 'sensordx')]
             level_2['station_sensor'] = level_2['stationCode'] + '_' + level_2['sensorCode']
-            level_2 = level_2[['startDate', 'station_sensor', 'level']]
+            level_2 = level_2[['startDate', 'station_sensor', 'description', 'level']]
             level_2.startDate = pd.to_datetime([dateutil.parser.parse(i).strftime('%Y-%m-%d') for i in level_2['startDate']])
             level_2.set_index('startDate', inplace=True)
-            if end_date:
-                return level_2.loc[start_date:end_date]
-            else:
-                return level_2.loc[start_date]
+            level_2 = level_2.sort_index()
+            # print(level_2)
+            try:
+                if end_date:
+                    return level_2.loc[start_date:end_date]
+                else:
+                    return level_2.loc[start_date]
+            except KeyError as e:
+                return e
         else:
             return self.__handleApiError(apiRequest)
+        
+    # get the ground truth data
+    def ground_truth(self, start_date, end_date=None, level=3):
+        """
+        Retrieves ground truth data for a specified date range.
+
+        Parameters:
+        -----------
+        - start_date (str): The start date for the report in 'yyyy-mm-dd' format.
+        - end_date (str, optional): The end date for the report in 'yyyy-mm-dd' format.
+                                    If not provided, only data for the start_date is returned.
+
+        Returns:
+        -----------
+        - pandas.DataFrame: A DataFrame containing ground truth data with columns 'startDate',
+                            'station_sensor',  'description' and 'level'. The 'startDate' column is used as the index.
+
+        Raises:
+        -----------
+        - Exception: If there's an issue with the API request.
+
+        Usage:
+        -----------
+        To retrieve ground truth data for a specific date range:
+        ```python
+        start_date = '2023-01-01'
+        end_date = '2023-01-31'
+        report_data = ret.ground_truth(start_date, end_date)
+        ```
+
+        To retrieve ground truth data for a specific date:
+        ```
+        start_date = '2023-01-01'
+        report_data = ret.ground_truth(start_date)
+        ```
+        """
+        reqUrl = "https://datahub.tahmo.org/custom/sensordx/reports" # endpoint
+        # response = self.__request(reqUrl, {})
+        print(f'API request: {reqUrl}')
+        apiRequest = requests.get(f'{reqUrl}',
+                                    params={},
+                                    auth=requests.auth.HTTPBasicAuth(
+                                    self.apiKey,
+                                    self.apiSecret
+                                )
+        )
+        if apiRequest.status_code == 200:
+            reports = pd.DataFrame(apiRequest.json()['qualityObjects'])
+            reports = reports[reports.level != 2][['startDate', 'endDate', 'stationCode', 'sensorCode', 'description', 'level']]
+            reports['station_sensor'] = reports.stationCode + '_' + reports.sensorCode
+            reports = reports.drop(['stationCode', 'sensorCode'], axis=1)
+
+            # convert the start and end date to datetime format
+            reports['startDate'] = pd.to_datetime(reports['startDate']).dt.tz_localize(None)
+            reports['endDate'] = pd.to_datetime(reports['endDate']).dt.tz_localize(None)
+            # convert start_date string to datetime format
+            start_date_dt = pd.to_datetime(start_date).tz_localize(None)
+
+            try:
+                if end_date is None:
+                    # check for the date
+                    def check_date(row):
+                        if row.startDate <= start_date_dt and row.endDate >= start_date_dt:
+                            return start_date
+                    reports['Date'] = reports.apply(check_date, axis=1)
+                    reports = reports.dropna()
+                    reports = reports[['Date', 'station_sensor', 'description', 'level']]
+                    reports.set_index('Date', inplace=True)
+                    return reports
+                else:
+                    # convert end_date string to datetime format
+                    end_date_dt = pd.to_datetime(end_date).tz_localize(None)
+                    
+                    # Define a function to check if a date is within a range
+                    def check_date(row, date):
+                        return row['startDate'] <= date and row['endDate'] >= date
+                    reports_list = []
+                    # Iterate over the date range
+                    for single_date in pd.date_range(start_date, end_date):
+                        # Filter the reports for the current date
+                        filtered_reports = reports[reports.apply(check_date, axis=1, date=single_date)]
+                        
+                        # Add the current date as a new column
+                        filtered_reports['Date'] = single_date
+                        
+                        # Append the filtered reports to the list
+                        reports_list.append(filtered_reports)
+                    filtered_reports_df = pd.concat(reports_list)
+
+                    # Drop the startDate and endDate columns
+                    filtered_reports_df = filtered_reports_df.drop(['startDate', 'endDate'], axis=1)
+                    # Set the index to the Date column
+                    filtered_reports_df.set_index('Date', inplace=True)
+                    return filtered_reports_df
+
+            except KeyError as e:
+                return e
+                    
+
+
+        else:
+            return self.__handleApiError(apiRequest)
+
 '''
 A specific class to evaluate and validate the water level data using TAHMO Stations
 To be used as it is to maintain flow
@@ -623,7 +873,9 @@ class pipeline(retreive_data):
     - df (bool, optional): Flag indicating whether to return the result as a DataFrame. Defaults to False.
 
     Returns:
-    - DataFrame or list: DataFrame or list containing the stations within the specified radius. If df is True, a DataFrame is returned with the columns 'code', 'location.latitude', 'location.longitude', and 'distance'. If df is False, a list of station codes is returned.
+    - DataFrame or list: DataFrame or list containing the stations within the specified radius. If df is True, 
+    a DataFrame is returned with the columns 'code', 'location.latitude', 'location.longitude', and 'distance'. 
+    If df is False, a list of station codes is returned.
 
     """
         stations  = super().get_stations_info()
@@ -716,7 +968,7 @@ class pipeline(retreive_data):
         
     def shed_stations(self, weather_stations_data, water_level_data,
                         gauging_station_coords, radius, lag=3,
-                        percentage=1, above=None, below=None):
+                        percentage=1):
         """
         Filters and processes weather station data to identify stations
         potentially contributing to water level changes above or below
@@ -749,6 +1001,33 @@ class pipeline(retreive_data):
             positive correlations and lagged changes above the specified threshold.
         - below_threshold_lag (list): List of weather stations with
             positive correlations and lagged changes below the specified threshold.
+        
+        Usage:
+        ------------
+        Get the TAHMO stations that correlate with the water level data
+        ```python
+        import pandas as pd
+        from filter_stations import pipeline
+
+        # An instance of the pipeline class
+        pipe = pipeline(apiKey, apiSecret, maps_key)
+
+        # load the water level data and the weather stations data
+        water_level_data = pd.read_csv('water_level_data.csv')
+        weather_stations_data = pd.read_csv('weather_stations_data.csv') 
+
+        # get the coordinates of the gauging station
+        gauging_station_coords = (-0.416, 36.951)
+
+        # get the stations within a radius of 200km from the gauging station
+        radius = 200
+        
+        # get the stations that correlate with the water level data
+        above_threshold_lag, below_threshold_lag = pipe.shed_stations(weather_stations_data, water_level_data, 
+                                                                      gauging_station_coords, radius, 
+                                                                      lag=3, percentage=1)
+        ```
+        
         """
         # Filter the date range based on the water level data from first day of the water level data to the last day of the water level data
         weather_stations_data = weather_stations_data.loc[water_level_data.index[0]:water_level_data.index[-1]]
@@ -1280,6 +1559,13 @@ class Interactive_maps(retreive_data):
         Returns:
         -----------
         - HTML: The animation as an HTML object.
+        
+        The animation as an MP4 file
+
+        <video width="320" height="240" controls>
+            <source src="animation.mp4" type="video/mp4">
+        </video>
+
         """
         fig, ax = plt.subplots()
 
@@ -1402,6 +1688,10 @@ class Interactive_maps(retreive_data):
         --------
         - my_map : folium.folium.Map
             A Folium map object showing the locations of the weather stations in the given subsets.
+        
+        <div align="center">
+            <img src="interact.png" alt="Subset Map" width="80%">
+        </div>
         """
         # Read the csv file 
         df_rainfall = pd.read_csv(csv_file)
@@ -1454,7 +1744,7 @@ class Interactive_maps(retreive_data):
 
 # From the loaded data on the jobs scored, format the data
 class transform_data:
-    # inherit from retrieve_data class
+    
     def __init__(self, apiKey, apiSecret, api_key):
         super().__init__(apiKey, apiSecret, api_key)
 
