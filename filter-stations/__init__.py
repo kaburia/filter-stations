@@ -35,6 +35,8 @@ import requests
 import urllib.parse
 import pandas as pd
 import argparse
+import scipy as sc
+from scipy import integrate
 import dateutil.parser
 import math
 import haversine as hs
@@ -332,6 +334,113 @@ class retreive_data:
         else:
                 return dataframe.groupby(pd.Grouper(key='Date', axis=0, 
                                             freq=freq)).sum()
+
+    def aggregate_variables_mean(self, dataframe, freq='1D'):
+        """
+        Aggregates a pandas DataFrame of weather variables by summing values across each day.
+
+        Parameters:
+        -----------
+        - dataframe (pandas.DataFrame): DataFrame containing weather variable data.
+        - freq (str, optional): Frequency to aggregate the data by. Defaults to '1D'.
+
+        Returns:
+        -----------
+        - pandas.DataFrame: DataFrame containing aggregated weather variable data, summed by day.
+        
+        Usage:
+        -----------
+        Define the DataFrame containing the weather variable data:
+        ```python
+        dataframe = ret.get_measurements('TA00001', '2020-01-01', '2020-01-31', ['pr']) # data comes in 5 minute interval
+        ```
+        To aggregate data hourly:
+        ```python
+        hourly_data = ret.aggregate_variables(dataframe, freq='1H')
+        ```
+        To aggregate data by 12 hours:
+        ```python
+        half_day_data = ret.aggregate_variables(dataframe, freq='12H')
+        ```
+        To aggregate data by day:
+        ```python
+        daily_data = ret.aggregate_variables(dataframe, freq='1D')
+        ```
+        To aggregate data by week:
+        ```python
+        weekly_data = ret.aggregate_variables(dataframe, freq='1W')
+        ```
+        To aggregate data by month:
+        ```python
+        monthly_data = ret.aggregate_variables(dataframe, freq='1M')
+        ```
+        """
+        dataframe = dataframe.reset_index()
+        dataframe.rename(columns={'index':'Date'}, inplace=True)
+        # check if the column is all nan
+        if dataframe.iloc[:, 1].isnull().all():
+                return dataframe.groupby(pd.Grouper(key='Date', axis=0, 
+                                            freq=freq)).agg({f'{dataframe.columns[1]}': 
+                                                             lambda x: np.nan if x.isnull().all() 
+                                                             else x.isnull().mean()})    
+        else:
+                return dataframe.groupby(pd.Grouper(key='Date', axis=0, 
+                                            freq=freq)).mean()
+
+    def aggregate_variables_auc(self, dataframe, freq='1D'):
+        """
+        Aggregates a pandas DataFrame of weather variables by summing values across each day.
+
+        Parameters:
+        -----------
+        - dataframe (pandas.DataFrame): DataFrame containing weather variable data.
+        - freq (str, optional): Frequency to aggregate the data by. Defaults to '1D'.
+
+        Returns:
+        -----------
+        - pandas.DataFrame: DataFrame containing aggregated weather variable data, summed by day.
+        
+        Usage:
+        -----------
+        Define the DataFrame containing the weather variable data:
+        ```python
+        dataframe = ret.get_measurements('TA00001', '2020-01-01', '2020-01-31', ['pr']) # data comes in 5 minute interval
+        ```
+        To aggregate data hourly:
+        ```python
+        hourly_data = ret.aggregate_variables(dataframe, freq='1H')
+        ```
+        To aggregate data by 12 hours:
+        ```python
+        half_day_data = ret.aggregate_variables(dataframe, freq='12H')
+        ```
+        To aggregate data by day:
+        ```python
+        daily_data = ret.aggregate_variables(dataframe, freq='1D')
+        ```
+        To aggregate data by week:
+        ```python
+        weekly_data = ret.aggregate_variables(dataframe, freq='1W')
+        ```
+        To aggregate data by month:
+        ```python
+        monthly_data = ret.aggregate_variables(dataframe, freq='1M')
+        ```
+        """
+        ## aggregator function for the AUC
+        def auc_aggregation(values):
+            y_irr = np.array(values)
+            x_irr = np.linspace(1,y_irr.shape[0],y_irr.shape[0])
+            area_ci = integrate.simpson(y_irr, x_irr)
+            return area_ci  
+
+        dataframe = dataframe.reset_index()
+        dataframe.rename(columns={'index':'Date'}, inplace=True)
+        # check if the column is all nan
+        if dataframe.iloc[:, 1].isnull().all():
+                return dataframe.groupby(pd.Grouper(key='Date',axis=0,freq=freq)).agg(auc_aggregation)    
+        else:
+                return dataframe.groupby(pd.Grouper(key='Date', axis=0,freq=freq)).agg(auc_aggregation)
     
     # aggregate qualityflags
     def aggregate_qualityflags(self, dataframe):
