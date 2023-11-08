@@ -749,7 +749,7 @@ class retreive_data:
             return self.__handleApiError(apiRequest)
         
     # get the ground truth data
-    def ground_truth(self, start_date, end_date=None, level=3):
+    def ground_truth(self, start_date, end_date=None):
         """
         Retrieves ground truth data for a specified date range.
 
