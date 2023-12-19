@@ -32,7 +32,7 @@ maps = Interactive_maps(apiKey, apiSecret, maps_key)
 
 """
 import requests
-import urllib.parse
+from urllib.parse import quote
 import pandas as pd
 import argparse
 import dateutil.parser
@@ -1363,6 +1363,114 @@ class Filter(pipeline):
             plt.show()
         else:
             return list(stations['code'])
+    
+    # filter by precipitation data from BigQuery
+    def filter_pr(self, start_date, end_date, country=None, region=None,
+                    radius=None, multiple_stations=None, station=None):
+        """
+        Retrieves precipitation data from BigQuery based on specified parameters.
+
+        Parameters:
+        -----------
+        - start_date (str): Start date for data query.
+        - end_date (str): End date for data query.
+        - country (str): Country name for filtering stations.
+        - region (str): Region name for filtering stations.
+        - radius (str): Radius for stations within a specified region.
+        - multiple_stations (str): Comma-separated list of station IDs.
+        - station (str): Single station ID for data filtering.
+
+        Returns:
+        -----------
+        - pd.DataFrame: A Pandas DataFrame containing the filtered precipitation data.
+        
+        Usage:
+        -----------
+        To get precipitation data for a specific date range:
+        ```python
+        fs = Filter(api_key, api_secret, maps_key)  # Create an instance of your class
+        start_date = '2021-01-01'
+        end_date = '2021-01-31'
+        pr_data = fs.filter_pr(start_date, end_date)
+        ```
+        To get precipitation data for a specific date range and country:
+        ```python
+        fs = Filter(api_key, api_secret, maps_key)  # Create an instance of your class
+        start_date = '2021-01-01'
+        end_date = '2021-01-31'
+        country = 'Kenya'
+        pr_data = fs.filter_pr(start_date, end_date, country=country)
+        ```
+        To get precipitation data for a specific date range and region:
+        ```python
+        fs = Filter(api_key, api_secret, maps_key)  # Create an instance of your class
+        start_date = '2021-01-01'
+        end_date = '2021-01-31'
+        region = 'Nairobi'
+        pr_data = fs.filter_pr(start_date, end_date, region=region)
+        ```
+        To get precipitation data for a specific date range and region with a radius:
+        ```python
+        fs = Filter(api_key, api_secret, maps_key)  # Create an instance of your class
+        start_date = '2021-01-01'
+        end_date = '2021-01-31'
+        region = 'Nairobi'
+        radius = 100
+        pr_data = fs.filter_pr(start_date, end_date, region=region, radius=radius)
+        ```
+        To get precipitation data for a specific date range and multiple stations:
+        ```python
+        fs = Filter(api_key, api_secret, maps_key)  # Create an instance of your class
+        start_date = '2021-01-01'
+        end_date = '2021-01-31'
+        multiple_stations = ['TA00001', 'TA00002', 'TA00003']
+        pr_data = fs.filter_pr(start_date, end_date, multiple_stations=multiple_stations)
+        ```
+        To get precipitation data for a specific date range and a single station:
+        ```python
+        fs = Filter(api_key, api_secret, maps_key)  # Create an instance of your class
+        start_date = '2021-01-01'
+        end_date = '2021-01-31'
+        station = 'TA00001'
+        pr_data = fs.filter_pr(start_date, end_date, station=station)
+        ```
+
+        """
+        print('Retrieving precipitation data from BigQuery...')
+        # print(self.apiKey, self.apiSecret)
+        base_url = f"https://us-central1-tahmo-quality-control.cloudfunctions.net/retrieve-from-bigquery?api_key={self.apiKey}&api_secret={quote(self.apiSecret)}&start_date={start_date}&end_date={end_date}"
+        if country:
+            base_url += f'&country={country}'
+        elif region and radius is None:
+            base_url += f'&region={region}'
+        elif region and radius:
+            base_url += f'&region={region}&radius={radius}'
+        elif multiple_stations:
+            base_url += f'&stations={multiple_stations}'
+        elif station:
+            base_url += f'&stations={station}'
+        # print(base_url)
+        headersList = {
+        "Accept": "*/*",
+        "User-Agent": "Thunder Client (https://www.thunderclient.com)" 
+        }
+
+        payload = ""
+        apiRequest = requests.get(f'{base_url}',
+                                    params={},
+                                    auth=requests.auth.HTTPBasicAuth(
+                                    self.apiKey,
+                                    self.apiSecret
+                                )
+        )
+
+        
+        if apiRequest.status_code == 200:
+            response =  apiRequest.json()
+            # print(apiRequest.text)
+            return pd.read_json(response['data'])
+        else:
+            return self._retreive_data__handleApiError(apiRequest) 
 
     # get clogs for a certain duration based on quality objects file
     def clogs(self, startdate, enddate, flags_json='qualityobjects.json', as_csv=False, csv_file=None):
