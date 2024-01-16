@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='filter_stations',
-    version='0.5.4',
+    version='0.5.5',
     packages=find_packages(),
     include_package_data=True,
     description='Making it easier to navigate and clean TAHMO weather station data for ML development',
@@ -26,7 +26,8 @@ setup(
         'statsmodels',
         'tqdm',
         'geopandas',
-        'matplotlib-scalebar'
+        'matplotlib-scalebar',
+        'scikit-learn'
     ],
     entry_points={
         'console_scripts': [
