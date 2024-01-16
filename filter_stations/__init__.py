@@ -58,6 +58,8 @@ import multiprocessing as mp
 import geopandas as gpd
 from matplotlib_scalebar.scalebar import ScaleBar
 from shapely.geometry import Point
+from collections import Counter
+from sklearn.preprocessing import MinMaxScaler
 
 import warnings
 warnings. filterwarnings('ignore')
@@ -156,6 +158,70 @@ class retreive_data:
             return info.drop(labels=info['code'][info.code.str.contains('TH')].index, axis=0)
         else:
             return info
+    
+    # get station coordinates
+    def get_coordinates(self, station_sensor, normalize=False):
+        """
+        Retrieve longitudes,latitudes for a list of station_sensor names and duplicated for stations with multiple sensors.
+
+        Parameters:
+        -----------
+        - station_sensor (list): List of station_sensor names.
+        - normalize (bool): If True, normalize the coordinates using MinMaxScaler to the range (0,1).
+
+        Returns:
+        -----------
+        - pd.DataFrame: DataFrame containing longitude and latitude coordinates for each station_sensor.
+
+        Usage:
+        -----------
+        To retrieve coordinates 
+        ```python
+        start_date = '2023-01-01'
+        end_date = '2023-12-31'
+        country= 'KE'
+        
+        # get the precipitation data for the stations
+        ke_pr = filt.filter_pr(start_date=start_date, end_date=end_date, 
+                                country='Kenya').set_index('Date')
+        
+        # get the coordinates
+        xs = ret.get_coordinates(ke_pr.columns, normalize=True)
+        """
+        station_sensor = sorted(station_sensor)
+        # Extract unique station names
+        unique_stations = set([station.split('_')[0] for station in station_sensor])
+
+        # Get information for all stations in a single call
+        all_stations_info = self.get_stations_info(multipleStations=list(unique_stations))
+
+        # A dictionary with the number of stations per sensor
+        stations_count = Counter([station.split('_')[0] for station in station_sensor])
+
+        # coordinates list to store lat,lon
+        coordinates_list = []
+
+        # coord dict
+        coord_dict = dict()
+
+        # loop through the dictionary appending to the coordinates_list duplicating depending on the count
+        for station, count in stations_count.items():
+            # Extract latitude and longitude information for the station
+            station_info = all_stations_info[all_stations_info.code == station][['location.longitude', 'location.latitude']].values[0]
+            coordinates_list.extend([list(station_info)] * count)
+            # append to the coord_dict
+            coord_dict[station] = coordinates_list
+            coordinates_list = []
+
+        coordinates_array = np.vstack([np.array(coords) for coords in coord_dict.values()])
+
+        if normalize:
+            # Normalize  (latitude and longitude)
+            scaler = MinMaxScaler()
+            coordinates_array = scaler.fit_transform(coordinates_array)
+
+        return pd.DataFrame(coordinates_array.T, columns=station_sensor, index=['longitude', 'latitude'])
+    
 
         
     def get_variables(self):
@@ -1364,6 +1430,21 @@ class Filter(pipeline):
         else:
             return list(stations['code'])
     
+    # remove columns with all zeros
+    def remove_zero_columns(self, df):
+        """
+        Removes columns with all zeros from a DataFrame.
+
+        Parameters:
+        -----------
+        - df (DataFrame): The DataFrame to remove columns from.
+
+        Returns:
+        -----------
+        - DataFrame: The DataFrame with columns containing all zeros removed.
+        """
+        return df.loc[:, (df != 0).any(axis=0)]
+    
     # filter by precipitation data from BigQuery
     def filter_pr(self, start_date, end_date, country=None, region=None,
                     radius=None, multiple_stations=None, station=None):
@@ -1446,9 +1527,9 @@ class Filter(pipeline):
         elif region and radius:
             base_url += f'&region={region}&radius={radius}'
         elif multiple_stations:
-            base_url += f'&stations={multiple_stations}'
+            base_url += f'&multiple_stations={multiple_stations}'
         elif station:
-            base_url += f'&stations={station}'
+            base_url += f'&station={station}'
         # print(base_url)
         headersList = {
         "Accept": "*/*",
