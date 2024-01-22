@@ -12,6 +12,7 @@ All methods require an API key and secret, which can be obtained by contacting T
 - The ```Filter``` class is used to filter weather stations data based on things like distance and region.<br>
 - The ```pipeline``` class is used to create a pipeline of filters to apply to weather stations based on how they correlate with water level data.<br>
 - The ```Interactive_maps``` class is used to plot weather stations on an interactive map.<br>
+- The ```Water_level``` class is used to retrieve water level data and coordinates of gauging stations.<br>
 
 ```python
 # Import the necessary modules
@@ -1549,7 +1550,7 @@ class Filter(pipeline):
         if apiRequest.status_code == 200:
             response =  apiRequest.json()
             # print(apiRequest.text)
-            return pd.read_json(response['data'])
+            return pd.read_json(response['data']).set_index('Date')
         else:
             return self._retreive_data__handleApiError(apiRequest) 
 
@@ -1928,7 +1929,107 @@ class Interactive_maps(retreive_data):
         
         # display the map
         return my_map
+
+# A class for water level monitoring
+class Water_level:
+    # method to get the coordinates of the gauging stations either ewaso or muringato
+    def coordinates(self, region):
+        """
+        Get the latitude and longitude coordinates for a specified region.
+
+        Parameters:
+        -----------
+        - region (str): The region for which coordinates are requested. 
+                    Valid values are 'muringato' or 'ewaso'.
+
+        Returns:
+        ----------
+        - tuple: A tuple containing the latitude and longitude coordinates.
+
+        Raises:
+        - ValueError: If the region provided is not 'muringato' or 'ewaso'.
+
+        Example:
+        ```
+        # Example usage:
+        wl = Water_level()
+        coords = wl.coordinates('muringato')
+        print(coords)  # Output: (-0.406689, 36.96301)
+        ```
+        """
+        # muringato lat,lon gauging station
+        muringato = (-0.406689, 36.96301)
+        # ewaso lat,lon gauging station
+        ewaso = (0.026833, 36.914637)
+        if region.lower() == 'muringato':
+            return muringato
+        elif region.lower() == 'ewaso':
+            return ewaso
+        else:
+            raise ValueError('The region can either be muringato or ewaso')
     
+    # get the water level data from the api
+    def water_level_data(self, region, start_date=None, end_date=None):
+        """
+        Retrieve water level data for a specified region and optional date range.
+
+        Parameters:
+        -----------
+        - region (str): The region for which water level data is requested. 
+                    Valid values are 'muringato' or 'ewaso'.
+        - start_date (str, optional): Start date for filtering the data. Format: 'YYYY-MM-DD'.
+        - end_date (str, optional): End date for filtering the data. Format: 'YYYY-MM-DD'.
+
+        Returns:
+        -----------
+        - pd.DataFrame: A Pandas DataFrame containing water level data with a DateTime index.
+
+        Raises:
+        -------
+        - ValueError: If the region provided is not 'muringato' or 'ewaso'.
+        - ValueError: If the request to the API is not successful.
+
+        Usage:
+        ```python
+        from filter_stations import water_level
+        wl = Water_level()
+        # get water level data for the muringato gauging station
+        muringato_data = wl.water_level_data('muringato')
+        # get water level data for the ewaso gauging station
+        ewaso_data = wl.water_level_data('ewaso') 
+        ```
+        """
+        # base url for the api
+        base_url = 'https://us-central1-tahmo-quality-control.cloudfunctions.net/water-level-extract'
+        # subset by region
+        if region.lower() == 'muringato':
+            base_url += '?region=muringato'
+        elif region.lower() == 'ewaso':
+            base_url += '?region=ewaso'
+        else:
+            raise ValueError('The region can either be muringato or ewaso')
+        
+        # get the data
+        req = requests.get(base_url)
+        
+        # check if the request was successful
+        if req.status_code == 200:
+            water_level_data = pd.read_json(req.json()['data'])
+            water_level_data['Date'] = pd.to_datetime(water_level_data['Date'])
+            water_level_data = water_level_data.set_index('Date')
+            if start_date and end_date:
+                # if start date is before the 
+                return water_level_data[start_date:end_date]
+            elif start_date and not end_date:
+                return water_level_data[start_date:]
+            elif end_date and not start_date:
+                return water_level_data[:end_date]
+            else:
+                return water_level_data
+        else:
+            raise ValueError('The request was not successful')
+            
+
 
 
 # From the loaded data on the jobs scored, format the data

@@ -11,5 +11,6 @@ All methods require an API key and secret, which can be obtained by contacting T
 - The ```Filter``` class is used to filter weather stations data based on things like distance and region.<br>
 - The ```pipeline``` class is used to create a pipeline of filters to apply to weather stations based on how they correlate with water level data.<br>
 - The ```Interactive_maps``` class is used to plot weather stations on an interactive map.<br>
+- The ```Water_level``` class is used to retrieve water level data and coordinates of gauging stations.<br>
 
 For instructions on shedding weather stations based on your water level data and gauging station coordinates, please refer to the [water_level_pipeline.md](https://github.com/kaburia/filter-stations/blob/v0.5.1/water_level_pipeline.md) file.
