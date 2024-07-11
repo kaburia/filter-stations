@@ -1,8 +1,6 @@
-
 ## Documentation
 You can find the documentation for the project by following this link<br>
 https://filter-stations.netlify.app/
-
 
 Getting Started
 ---------------
@@ -14,3 +12,17 @@ All methods require an API key and secret, which can be obtained by contacting T
 - The ```Water_level``` class is used to retrieve water level data and coordinates of gauging stations.<br>
 
 For instructions on shedding weather stations based on your water level data and gauging station coordinates, please refer to the [water_level_pipeline.md](https://github.com/kaburia/filter-stations/blob/main/water_level_pipeline.md) file.
+
+## Citations
+
+If you use this package in your research, please cite it using the following BibTeX entry:
+
+```bibtex
+@misc{filter-stations,
+  author = {Austin Kaburia},
+  title = {filter-stations},
+  year = {2024},
+  publisher = {Python Package Index},
+  journal = {PyPI},
+  howpublished = {\url{https://pypi.org/project/filter-stations/}},
+}
