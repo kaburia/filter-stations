@@ -188,6 +188,7 @@ class retreive_data:
         
         # get the coordinates
         xs = ret.get_coordinates(ke_pr.columns, normalize=True)
+        ```
         """
         station_sensor = sorted(station_sensor)
         # Extract unique station names
@@ -348,19 +349,31 @@ class retreive_data:
             return self.__handleApiError(apiRequest)     
         
     
-    def aggregate_variables(self, dataframe, freq='1D'):
+    def aggregate_variables(self, dataframe, freq='1D', method='sum'):
         """
-        Aggregates a pandas DataFrame of weather variables by summing values across each day.
+        Aggregates a pandas DataFrame of weather variables by applying a specified method across a given frequency.
 
         Parameters:
         -----------
         - dataframe (pandas.DataFrame): DataFrame containing weather variable data.
-        - freq (str, optional): Frequency to aggregate the data by. Defaults to '1D'.
+        - freq (str, optional): Frequency to aggregate the data by. Defaults to '1D'. 
+                                Examples include '1H' for hourly, '12H' for every 12 hours, '1D' for daily, '1W' for weekly, '1M' for monthly, etc.
+        - method (str or callable, optional): Method to use for aggregation. Defaults to 'sum'.
+                                            Acceptable string values are 'sum', 'mean', 'min', 'max'. 
+                                            Alternatively, you can provide a custom aggregation function (callable).
+                                            
+                                            Example of a custom method:
+                                            ```python
+                                            def custom_median(x):
+                                                return np.nan if x.isnull().all() else x.median()
+
+                                            daily_median_data = aggregate_variables(dataframe, freq='1D', method=custom_median)
+                                            ```
 
         Returns:
         -----------
-        - pandas.DataFrame: DataFrame containing aggregated weather variable data, summed by day.
-        
+        - pandas.DataFrame: DataFrame containing aggregated weather variable data according to the specified frequency and method.
+            
         Usage:
         -----------
         Define the DataFrame containing the weather variable data:
@@ -369,39 +382,60 @@ class retreive_data:
         ```
         To aggregate data hourly:
         ```python
-        hourly_data = ret.aggregate_variables(dataframe, freq='1H')
+        hourly_data = aggregate_variables(dataframe, freq='1H')
         ```
         To aggregate data by 12 hours:
         ```python
-        half_day_data = ret.aggregate_variables(dataframe, freq='12H')
+        half_day_data = aggregate_variables(dataframe, freq='12H')
         ```
         To aggregate data by day:
         ```python
-        daily_data = ret.aggregate_variables(dataframe, freq='1D')
+        daily_data = aggregate_variables(dataframe, freq='1D')
         ```
         To aggregate data by week:
         ```python
-        weekly_data = ret.aggregate_variables(dataframe, freq='1W')
+        weekly_data = aggregate_variables(dataframe, freq='1W')
         ```
         To aggregate data by month:
         ```python
-        monthly_data = ret.aggregate_variables(dataframe, freq='1M')
+        monthly_data = aggregate_variables(dataframe, freq='1M')
+        ```
+        To use a custom aggregation method:
+        ```python
+        def custom_median(x):
+            return np.nan if x.isnull().all() else x.median()
+
+        daily_median_data = aggregate_variables(dataframe, freq='1D', method=custom_median)
         ```
         """
         dataframe = dataframe.reset_index()
-        dataframe.rename(columns={'index':'Date'}, inplace=True)
-        # check if the column is all nan
-        if dataframe.iloc[:, 1].isnull().all():
-                return dataframe.groupby(pd.Grouper(key='Date', axis=0, 
-                                            freq=freq)).agg({f'{dataframe.columns[1]}': 
-                                                             lambda x: np.nan if x.isnull().all() 
-                                                             else x.isnull().sum()})    
+        dataframe.rename(columns={'index': 'Date'}, inplace=True)
+
+        # Define aggregation methods
+        aggregation_methods = {
+            'sum': lambda x: np.nan if x.isnull().all() else x.sum(),
+            'mean': lambda x: np.nan if x.isnull().all() else x.mean(),
+            'min': lambda x: np.nan if x.isnull().all() else x.min(),
+            'max': lambda x: np.nan if x.isnull().all() else x.max()
+        }
+
+        # Determine the aggregation function to use
+        if isinstance(method, str):
+            if method not in aggregation_methods:
+                raise ValueError('Invalid method. Method should be either "sum", "mean", "min", "max" or a custom function.')
+            agg_func = aggregation_methods[method]
+        elif callable(method):
+            agg_func = lambda x: np.nan if x.isnull().all() else method(x)
         else:
-                return dataframe.groupby(pd.Grouper(key='Date', axis=0, 
-                                            freq=freq)).sum()
+            raise ValueError('Invalid method. Method should be either "sum", "mean", "min", "max" or a custom function.')
+
+        # Apply the aggregation function
+        aggregated_df = dataframe.groupby(pd.Grouper(key='Date', freq=freq)).agg(agg_func)
+
+        return aggregated_df
     
-    # aggregate qualityflags
-    def aggregate_qualityflags(self, dataframe):
+    # # aggregate qualityflags
+    def aggregate_qualityflags(self, dataframe, freq='1D'):
         """
         Aggregate quality flags in a DataFrame by day.
 
@@ -418,7 +452,43 @@ class retreive_data:
         dataframe.rename(columns={'index': 'Date'}, inplace=True)
         
         # Group by day and calculate the mean. If value that day is greater than 1, get the ceiling.
-        return dataframe.groupby(pd.Grouper(key='Date', axis=0, freq='1D')).mean().applymap(lambda x: ceil(x) if x > 1 else x)
+        # return dataframe.groupby(pd.Grouper(key='Date', axis=0, freq='1D')).mean().applymap(lambda x: ceil(x) if x > 1 else x)
+        # return the max value for the day
+        return dataframe.groupby(pd.Grouper(key='Date', axis=0, freq=freq)).max()
+        # Function to count unique values for each column in a group
+        # def count_unique_values(group):
+        #     return {col: group[col].value_counts().to_dict() for col in group.columns if col != 'Date'}
+        # return dataframe.groupby(pd.Grouper(key='Date', axis=0, freq=freq)).apply(count_unique_values)
+    # def aggregate_qualityflags(self, dataframe, freq='1D'):
+    #     """
+    #     Aggregate quality flags in a DataFrame by a specified frequency.
+
+    #     Parameters:
+    #     -----------
+    #     - dataframe (pd.DataFrame): The DataFrame containing the measurements.
+    #     - freq (str): The frequency for aggregation (default is '1D' for one day).
+
+    #     Returns:
+    #     -----------
+    #     - pd.DataFrame: A DataFrame with a new column 'aggregated_counts' containing dictionaries
+    #                     of value counts for each aggregation period.
+    #     """
+    #     dataframe = dataframe.reset_index()
+    #     dataframe.rename(columns={'index': 'Date'}, inplace=True)
+    #     # Ensure 'Date' is a datetime column
+    #     dataframe['Date'] = pd.to_datetime(dataframe['Date'])
+        
+    #     # Group by the specified frequency
+    #     grouped = dataframe.groupby(pd.Grouper(key='Date', axis=0, freq=freq))
+
+    #     # Function to count unique values for each column in a group and return as a dictionary
+    #     def count_unique_values(group):
+    #         return {col: group[col].value_counts().to_dict() for col in group.columns if col != 'Date'}
+
+    #     # Apply the function to each group and construct the result DataFrame
+    #     result = grouped.apply(lambda group: pd.Series(count_unique_values(group))).reset_index()
+
+    #     return result
 
 
 
@@ -500,10 +570,18 @@ class retreive_data:
                                 variable_index = columns.index('variable')
                                 sensor_index = columns.index('sensor')
                                 value_index = columns.index('value')
+                                # print('time_index', time_index)
+                                # print('quality_index', quality_index)
+                                # print('variable_index', variable_index)
+                                # print('sensor_index', sensor_index)
+                                # print('value_index', value_index)
+
+                                # print(time_index, quality_index, variable_index, sensor_index, value_index)
 
                                 # Create list of unique variables within the retrieved observations.
                                 if not isinstance(variables, list) or len(variables) == 0:
                                     shortcodes = list(set(list(map(lambda x: x[variable_index], observations))))
+                                    # print('shortcodes', shortcodes)
                                 else:
                                     shortcodes = variables
 
@@ -513,10 +591,21 @@ class retreive_data:
                                     timeserie = list(map(lambda x: [x[time_index], x[value_index] if x[quality_index] == 1 else np.nan, x[sensor_index], x[quality_index]],
                                                         list(filter(lambda x: x[variable_index] == shortcode, observations))))
 
+                                    # print('timeserie', timeserie)
+                                    # print('shortcode', shortcode)
+                                    timeserie = [
+                                                    [obs[time_index], obs[value_index], obs[quality_index], obs[sensor_index], obs[quality_index]]
+                                                    for obs in observations
+                                                    if obs[variable_index] == shortcode
+                                                ]
+                                    # print the observations for the sensor index
+                                    # print(observations[0][sensor_index])
+                                    # print(len(observations))
                                     if shortcode in seriesHolder:
-                                        seriesHolder[shortcode] = seriesHolder[shortcode] + timeserie
+                                        seriesHolder[shortcode] = seriesHolder[shortcode] + observations
                                     else:
-                                        seriesHolder[shortcode] = timeserie
+                                        seriesHolder[shortcode] = observations
+                                    # print(seriesHolder)
 
                                     # Clean up scope.
                                     del timeserie
@@ -532,19 +621,20 @@ class retreive_data:
 
             for shortcode in seriesHolder:
                 # Check if there are duplicate entries in this timeseries (multiple sensors for same variable).
-                timestamps = list(map(lambda x: x[0], seriesHolder[shortcode]))
+                timestamps = list(map(lambda x: x[time_index], seriesHolder[shortcode]))
 
                 if len(timestamps) > len(set(timestamps)):
                     # Split observations per sensor.
                     print('Split observations for %s per sensor' % shortcode)
-                    sensors = list(set(list(map(lambda x: x[2], seriesHolder[shortcode]))))
+                    sensors = list(set(list(map(lambda x: x[sensor_index], seriesHolder[shortcode]))))
                     for sensor in sensors:
-                        sensorSerie = list(filter(lambda x: x[2] == sensor, seriesHolder[shortcode]))
-                        timestamps = list(map(lambda x: pd.Timestamp(x[0]), sensorSerie))
-                        values = list(map(lambda x: x[1], sensorSerie))
+                        sensorSerie = list(filter(lambda x: x[sensor_index] == sensor, seriesHolder[shortcode]))
+                        timestamps = list(map(lambda x: pd.Timestamp(x[time_index]), sensorSerie))
+                        values = list(map(lambda x: x[value_index], sensorSerie))
                         serie = pd.Series(values, index=pd.DatetimeIndex(timestamps), dtype=np.float64)
                         if quality_flags:
-                            q_flag = list(map(lambda x: x[3], sensorSerie))
+                            q_flag = list(map(lambda x: x[quality_index], sensorSerie))
+                            # print('q_flag', q_flag)
                             serie = pd.Series(q_flag, index=pd.DatetimeIndex(timestamps), dtype=np.int32)
                             series.append(serie.to_frame('%s_%s_%s' % (station, sensor, 'Q_FLAG')))
                             continue
@@ -560,20 +650,28 @@ class retreive_data:
                         del serie
                 else:
                     # print(pd.DataFrame(seriesHolder[shortcode]))
-                    values = list(map(lambda x: x[1], seriesHolder[shortcode]))
+                    values = list(map(lambda x: x[value_index], seriesHolder[shortcode]))
                     serie = pd.Series(values, index=pd.DatetimeIndex(timestamps), dtype=np.float64)
 
                     if len(values) > 0:
-                        if quality_flags:
-                            q_flag = list(map(lambda x: x[3], seriesHolder[shortcode]))
-                            serie = pd.Series(q_flag, index=pd.DatetimeIndex(timestamps), dtype=np.int32)
-                            series.append(serie.to_frame('%s_%s' % (station, 'Q_FLAG')))
-                            continue
+                        
                                 # series.append(serie.to_frame('%s_%s_%s' % (station, 'quality_flag')))
-                        sensors = list(set(list(map(lambda x: x[2], seriesHolder[shortcode]))))
+                        sensors = list(set(list(map(lambda x: x[sensor_index], seriesHolder[shortcode]))))
                         serie = pd.Series(values, index=pd.DatetimeIndex(timestamps), dtype=np.float64)
+                        if quality_flags:
+                            q_flag = list(map(lambda x: x[quality_index], seriesHolder[shortcode]))
+                            # print('q_flag', q_flag)
+                            serie = pd.Series(q_flag, index=pd.DatetimeIndex(timestamps), dtype=np.int32)
+                            if dataset == 'raw':
+                                series.append(serie.to_frame('%s_%s_%s' % (station, sensors[0], 'Q_FLAG')))
+                            elif dataset == 'controlled':
+                                series.append(serie.to_frame('%s_%s' % (station, 'Q_FLAG')))
+                            continue
                         if len(variables) == 1:
-                            series.append(serie.to_frame('%s_%s' % (station, sensors[0])))
+                            if dataset == 'raw':
+                                series.append(serie.to_frame('%s_%s' % (station, sensors[0])))
+                            elif dataset == 'controlled':
+                                series.append(serie.to_frame('%s' % (station)))
                         else:
                             series.append(serie.to_frame('%s_%s_%s' % (shortcode, station, sensors[0])))
 
@@ -595,8 +693,6 @@ class retreive_data:
             else:
                 df = pd.DataFrame()
             
-            
-
             # Clean up memory.
             del series
             gc.collect()
@@ -609,7 +705,9 @@ class retreive_data:
            
             else:
                 # remove the last row 
-                df = df[:-1] # lacks values for the last day
+                df = df # lacks values for the last day
+                if quality_flags:
+                    return self.aggregate_qualityflags(df, freq=aggregate)
                 return self.aggregate_variables(df, freq=aggregate)
 
     def multiple_measurements(self, 
@@ -619,7 +717,8 @@ class retreive_data:
                               variables, 
                               dataset='controlled',
                               csv_file=None, 
-                              aggregate='1D'):
+                              aggregate='1D',
+                              quality_flags=False):
         """
         Retrieves measurements for multiple stations within a specified date range.
 
@@ -688,7 +787,7 @@ class retreive_data:
             results = []
             with tqdm(total=len(stations_list), desc='Retrieving data for stations') as pbar:
                 for station in stations_list:
-                    results.append(pool.apply_async(self.get_measurements, args=(station, startDate, endDate, variables, dataset, aggregate), callback=lambda _: pbar.update(1)))
+                    results.append(pool.apply_async(self.get_measurements, args=(station, startDate, endDate, variables, dataset, aggregate, quality_flags), callback=lambda _: pbar.update(1)))
 
                 pool.close()
                 pool.join()
@@ -707,7 +806,7 @@ class retreive_data:
         finally:
             pool.terminate()
         
-    # multiple quality flags for multiple stations
+    # # multiple quality flags for multiple stations
     def multiple_qualityflags(self, stations_list, startDate, endDate, csv_file=None):
         """
         Retrieves and aggregates quality flag data for multiple stations within a specified date range.
@@ -750,6 +849,67 @@ class retreive_data:
                 df = pd.concat(df_stats, axis=1)
                 df.to_csv(f'{csv_file}.csv')
                 return df.reindex(sorted(df.columns),axis=1) #sorted dataframe
+    
+
+    def multiple_qualityflags(self, stations_list, startDate, endDate, csv_file=None):
+        """
+        Retrieves and aggregates quality flag data for multiple stations within a specified date range.
+
+        Parameters:
+        -----------
+        - stations_list (list): A list of station codes for which to retrieve data.
+        - startDate (str): The start date in 'YYYY-MM-DD' format.
+        - endDate (str): The end date in 'YYYY-MM-DD' format.
+        - csv_file (str, optional): The name of the CSV file to save the aggregated data. Default is None.
+
+        Returns:
+        -----------
+        - pandas.DataFrame or None: A DataFrame containing the aggregated quality flag data for the specified stations,
+        or None if an error occurs.
+
+        Raises:
+            Exception: If an error occurs while retrieving data for a station.
+
+        """
+        if not isinstance(stations_list, list):
+            raise ValueError('Pass in a list')
+
+        error_dict = {}
+        pool = mp.Pool(processes=mp.cpu_count())  # Use all available CPU cores
+
+        try:
+            results = []
+            with tqdm(total=len(stations_list), desc='Retrieving Quality Flags for stations') as pbar:
+                for station in stations_list:
+                    results.append(pool.apply_async(self.get_measurements, args=(station, startDate, endDate, ['pr'], 'controlled', True), callback=lambda _: pbar.update(1)))
+
+                pool.close()
+                pool.join()
+
+            df_stats = []
+            for result in results:
+                try:
+                    data = result.get()
+                    agg_data = self.aggregate_qualityflags(data)
+                    df_stats.append(agg_data)
+                except Exception as e:
+                    error_dict[station] = f'{e}'
+
+            if len(df_stats) > 0:
+                df = pd.concat(df_stats, axis=1)
+                if csv_file:
+                    df.to_csv(f'{csv_file}.csv')
+                return df.reindex(sorted(df.columns), axis=1)
+        except Exception as e:
+            print(f"An error occurred: {e}")
+        finally:
+            pool.terminate()
+
+        with open("Errors.json", "w") as outfile:
+            json.dump(error_dict, outfile, indent=4)
+        
+        return None
+
     
     # get the anomalies data report
     def anomalies_report(self, start_date, end_date=None):
@@ -916,6 +1076,58 @@ class retreive_data:
 
         else:
             return self.__handleApiError(apiRequest)
+
+class Kieni:
+    # uses basic authentication
+    def __init__(self, api_key, api_secret):
+        self.api_key = api_key
+        self.api_secret = api_secret
+ 
+    # get data from the kieni API
+    def kieni_weather_data(self, start_date=None, end_date=None, variable=None,
+                        method='sum', freq='1D'):
+        """
+        Retrieves weather data from the Kieni API endpoint and returns it as a pandas DataFrame after processing.
+
+        Parameters:
+        -----------
+        - start_date (str, optional): The start date for retrieving weather data in 'YYYY-MM-DD' format. Defaults to None if None returns from the beginning of the data.
+        - end_date (str, optional): The end date for retrieving weather data in 'YYYY-MM-DD' format. Defaults to None if None returns to the end of the data.
+        - variable (str, optional): The weather variable to retrieve same as the weather shortcodes by TAHMO e.g., 'pr', 'ap', 'rh'
+        - method (str, optional): The aggregation method to apply to the data ('sum', 'mean', 'min', 'max' and custom functions). Defaults to 'sum'.
+        - freq (str, optional): The frequency for data aggregation (e.g., '1D' for daily, '1H' for hourly). Defaults to '1D'.
+
+        Returns:
+        -----------
+        - pandas.DataFrame: DataFrame containing the weather data for the specified parameters, with columns containing NaN values dropped.
+
+        Usage:
+        -----------
+        To retrieve daily rainfall data from January 1, 2024, to January 31, 2024:
+        ```python
+        # Instantiate the Kieni class
+        api_key, api_secret = '', '' # Request DSAIL for the API key and secret
+        kieni = Kieni(api_key, api_secret)
+
+        kieni_weather_data = kieni.kieni_weather_data(start_date='2024-01-01', end_date='2024-01-31', variable='pr', freq='1D', method='sum')
+        ```
+
+        To retrieve hourly temperature data from February 1, 2024, to February 7, 2024:
+        ```python
+        kieni_weather_data = kieni.kieni_weather_data(start_date='2024-02-01', end_date='2024-02-07', variable='te', method='mean', freq='1H')
+        ```
+        """
+        # Make the request
+        reqUrl = f"https://us-central1-tahmo-quality-control.cloudfunctions.net/kieni-API?start_date={start_date}&end_date={end_date}&variable={variable}&freq={freq}&method={method}"
+        apiRequest = requests.get(reqUrl, auth=requests.auth.HTTPBasicAuth(self.api_key, self.api_secret))
+        response = apiRequest.json()
+        # convert the response to a pandas dataframe
+        data = pd.DataFrame(response)
+        # drop all columns that are filled with NaN
+        data.dropna(axis=1, how='all', inplace=True)
+        # convert index to datetime
+        data.index = pd.to_datetime(data.index)
+        return data
 
 '''
 A specific class to evaluate and validate the water level data using TAHMO Stations
@@ -1175,6 +1387,7 @@ class pipeline(retreive_data):
 
             if save:
                 fig.savefig(f'{cols}.png', dpi=dpi)
+
 
 
 # Move the functions to a class
