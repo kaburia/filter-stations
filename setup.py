@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='filter_stations',
-    version='0.6.1',
+    version='0.6.2',
     packages=find_packages(),
     include_package_data=True,
     description='Making it easier to navigate and clean TAHMO weather station data for ML development',
