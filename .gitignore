@@ -14,3 +14,6 @@ filter_stations.egg-info/
 
 # test filter-stations
 filter-stations.py
+
+# Ignore virtual environment
+venv/
