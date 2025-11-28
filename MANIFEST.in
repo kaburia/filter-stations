@@ -1,2 +1,4 @@
 recursive-include filter_stations/geo *
 recursive-include water_level_pipeline_files *
+include requirements.txt
+include README.md
