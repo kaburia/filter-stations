@@ -37,8 +37,8 @@ html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
 
 
-autodoc_mock_imports = [
-    "rioxarray", "rasterio", "huggingface_hub", 
-    "networkx", "dask", "xarray", "pandas", "numpy", 
-    "requests", "tqdm", "python-dateutil"
-]
+# autodoc_mock_imports = [
+#     "rioxarray", "rasterio", "huggingface_hub", 
+#     "networkx", "dask", "xarray", "pandas", "numpy", 
+#     "requests", "tqdm", "python-dateutil"
+# ]
