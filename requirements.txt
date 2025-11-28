@@ -1,0 +1,12 @@
+numpy
+pandas
+xarray
+rioxarray
+rasterio
+huggingface_hub
+requests
+python-dateutil
+tqdm
+haversine
+networkx
+dask
