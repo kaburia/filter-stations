@@ -8,6 +8,11 @@ import warnings
 from huggingface_hub import HfFileSystem, hf_hub_url
 
 class RainLoader:
+    """
+    A unified loader for streaming climate data from Hugging Face or local storage.
+    Supports gridded satellite/reanalysis data (IMERG, CHIRPS, ERA5, TAMSAT),
+    station data (TAHMO), and static topography (NASADEM).
+    """
     def __init__(self, source_path='', use_hf=True, repo_id='kaburia/DSAIL-weather-data', token=None):
         self.use_hf = use_hf
         self.repo_id = repo_id
@@ -45,6 +50,50 @@ class RainLoader:
             return file_identifier
 
     def get_dataset(self, dataset, start_date=None, end_date=None):
+        """
+        Main entry point to retrieve climate datasets.
+
+        This method handles the logic for selecting the correct loader (Grid, Station, or Static)
+        and applying temporal filtering if applicable.
+
+        Parameters
+        ----------
+        dataset : str
+            Name of the dataset to retrieve. Case-insensitive.
+            Supported options:
+            
+            * **Gridded:** 'IMERG', 'CHIRPS', 'ERA5', 'TAMSAT'
+            * **Stations:** 'TAHMO'
+            * **Static:** 'NASADEM'
+            
+        start_date : str, optional
+            Start date for filtering in 'YYYY-MM-DD' format. 
+            Applicable only to time-series datasets (Grids and Stations).
+        end_date : str, optional
+            End date for filtering in 'YYYY-MM-DD' format.
+            Applicable only to time-series datasets.
+
+        Returns
+        -------
+        xarray.Dataset
+            The requested dataset with standardized coordinates:
+            
+            * **Time:** 'time' (datetime64)
+            * **Space:** 'lat', 'lon' (WGS84)
+            * **Variables:** 'precipitation' (for rainfall data) or 'elevation'/'slope'/'aspect' (for NASADEM).
+
+
+        Example
+        -------
+        To retrieve IMERG satellite rainfall data::
+
+            loader = RainLoader(token="hf_...")
+            ds = loader.get_dataset('IMERG', '2024-01-01', '2024-01-31')
+
+        To retrieve TAHMO station data with the slope and aspect added to the metadata::
+
+            ds_stations = loader.get_dataset('TAHMO', '2024-01-01', '2024-01-31')
+        """
         dataset_lower = dataset.lower()
 
         if dataset_lower == 'tahmo':

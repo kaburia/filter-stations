@@ -118,32 +118,33 @@ class RetrieveData:
     # get station coordinates
     def get_coordinates(self, station_sensor, normalize=False):
         """
-        Retrieve longitudes,latitudes for a list of station_sensor names and duplicated for stations with multiple sensors.
+        Retrieve longitudes, latitudes for a list of station_sensor names.
 
-        Parameters:
-        -----------
-        - station_sensor (list): List of station_sensor names.
-        - normalize (bool): If True, normalize the coordinates using MinMaxScaler to the range (0,1).
+        Parameters
+        ----------
+        station_sensor : list
+            List of station_sensor names.
+        normalize : bool
+            If True, normalize the coordinates using MinMaxScaler to the range (0,1).
 
-        Returns:
-        -----------
-        - pd.DataFrame: DataFrame containing longitude and latitude coordinates for each station_sensor.
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame containing longitude and latitude coordinates.
 
-        Usage:
-        -----------
-        To retrieve coordinates
-        ```python
-        start_date = '2023-01-01'
-        end_date = '2023-12-31'
-        country= 'KE'
+        Usage
+        -----
+        To retrieve coordinates::
 
-        # get the precipitation data for the stations
-        ke_pr = filt.filter_pr(start_date=start_date, end_date=end_date,
-                                country='Kenya').set_index('Date')
+            start_date = '2023-01-01'
+            end_date = '2023-12-31'
+            country= 'KE'
 
-        # get the coordinates
-        xs = ret.get_coordinates(ke_pr.columns, normalize=True)
-        ```
+            # get the precipitation data
+            ke_pr = filt.filter_pr(start_date=start_date, end_date=end_date, country='Kenya')
+            
+            # get the coordinates
+            xs = ret.get_coordinates(ke_pr.columns, normalize=True)
         """
 
         station_sensor = sorted(station_sensor)
@@ -319,62 +320,43 @@ class RetrieveData:
 
     def aggregate_variables(self, dataframe, freq='1D', method='sum'):
         """
-        Aggregates a pandas DataFrame of weather variables by applying a specified method across a given frequency.
+            Aggregates a pandas DataFrame of weather variables.
 
-        Parameters:
-        -----------
-        - dataframe (pandas.DataFrame): DataFrame containing weather variable data.
-        - freq (str, optional): Frequency to aggregate the data by. Defaults to '1D'.
-                                Examples include '1H' for hourly, '12H' for every 12 hours, '1D' for daily, '1W' for weekly, '1M' for monthly, etc.
-        - method (str or callable, optional): Method to use for aggregation. Defaults to 'sum'.
-                                            Acceptable string values are 'sum', 'mean', 'min', 'max'.
-                                            Alternatively, you can provide a custom aggregation function (callable).
+            Parameters
+            ----------
+            dataframe : pandas.DataFrame
+                DataFrame containing weather variable data.
+            freq : str, optional
+                Frequency to aggregate by. Defaults to '1D'.
+                Examples: '1H' (hourly), '1D' (daily), '1W' (weekly).
+            method : str or callable, optional
+                Method to use for aggregation. Defaults to 'sum'.
+                Options: 'sum', 'mean', 'min', 'max'.
+                
+                Example of a custom method::
 
-                                            Example of a custom method:
-                                            ```python
-                                            def custom_median(x):
-                                                return np.nan if x.isnull().all() else x.median()
+                    def custom_median(x):
+                        return np.nan if x.isnull().all() else x.median()
 
-                                            daily_median_data = aggregate_variables(dataframe, freq='1D', method=custom_median)
-                                            ```
+                    data = aggregate_variables(df, freq='1D', method=custom_median)
 
-        Returns:
-        -----------
-        - pandas.DataFrame: DataFrame containing aggregated weather variable data according to the specified frequency and method.
+            Returns
+            -------
+            pandas.DataFrame
+                DataFrame containing aggregated weather variable data.
 
-        Usage:
-        -----------
-        Define the DataFrame containing the weather variable data:
-        ```python
-        dataframe = ret.get_measurements('TA00001', '2020-01-01', '2020-01-31', ['pr']) # data comes in 5 minute interval
-        ```
-        To aggregate data hourly:
-        ```python
-        hourly_data = aggregate_variables(dataframe, freq='1H')
-        ```
-        To aggregate data by 12 hours:
-        ```python
-        half_day_data = aggregate_variables(dataframe, freq='12H')
-        ```
-        To aggregate data by day:
-        ```python
-        daily_data = aggregate_variables(dataframe, freq='1D')
-        ```
-        To aggregate data by week:
-        ```python
-        weekly_data = aggregate_variables(dataframe, freq='1W')
-        ```
-        To aggregate data by month:
-        ```python
-        monthly_data = aggregate_variables(dataframe, freq='1M')
-        ```
-        To use a custom aggregation method:
-        ```python
-        def custom_median(x):
-            return np.nan if x.isnull().all() else x.median()
+            Usage
+            -----
+            To aggregate data hourly::
 
-        daily_median_data = aggregate_variables(dataframe, freq='1D', method=custom_median)
-        ```
+                hourly_data = aggregate_variables(dataframe, freq='1H')
+
+            To use a custom aggregation method::
+
+                def custom_median(x):
+                    return np.nan if x.isnull().all() else x.median()
+
+                daily_median = aggregate_variables(df, freq='1D', method=custom_median)
         """
 
 
@@ -642,60 +624,65 @@ class RetrieveData:
         """
         Retrieves measurements for multiple stations within a specified date range.
 
-        Parameters:
-        -----------
-        - stations_list (list): A list of strings containing the codes of the stations to retrieve data from.
-        - startDate (str): The start date for the measurements, in the format 'yyyy-mm-dd'.
-        - endDate (str): The end date for the measurements, in the format 'yyyy-mm-dd'.
-        - variables (list): A list of strings containing the names of the variables to retrieve.
-        - dataset (str): The name of the database to retrieve the data from. Default is 'controlled' alternatively 'raw' database.
-        - csv_file (str, optional): pass the name of the csv file to save the data otherwise it will return the dataframe.
-        - aggregate (bool): If True, aggregate the data per day; otherwise, return data in 5 minute interval.
+        Parameters
+        ----------
+        stations_list : list
+            A list of strings containing the codes of the stations to retrieve data from.
+        startDate : str
+            The start date for the measurements, in the format 'yyyy-mm-dd'.
+        endDate : str
+            The end date for the measurements, in the format 'yyyy-mm-dd'.
+        variables : list
+            A list of strings containing the names of the variables to retrieve.
+        dataset : str, optional
+            The name of the database to retrieve the data from. Default is 'controlled', alternatively 'raw'.
+        csv_file : str, optional
+            Pass the name of the csv file to save the data, otherwise it will return the dataframe.
+        aggregate : str, optional
+            Aggregation frequency. If '1D', aggregate per day.
+        quality_flags : bool, optional
+            If True, return quality flags instead of values.
+        num_workers : int, optional
+            Number of parallel workers. Defaults to 4.
 
-        Returns:
-        -----------
-        - df (pandas.DataFrame): A DataFrame containing the aggregated data for all stations.
+        Returns
+        -------
+        pandas.DataFrame
+            A DataFrame containing the aggregated data for all stations.
 
-        Raises:
-        -----------
-        - ValueError: If stations_list is not a list.
+        Raises
+        ------
+        ValueError
+            If stations_list is not a list.
 
-        ### Example Usage:
-        To retrieve precipitation data for stations in Kenya for the last week and save it as a csv file:
-        ```python
-        # Import the necessary modules
-        from datetime import datetime, timedelta
-        from filter_stations import retreive_data
+        Example
+        -------
+        To retrieve precipitation data for stations in Kenya for the last week and save it as a csv file::
 
-        # An instance of the retreive_data class
-        ret = retreive_data(apiKey, apiSecret, maps_key)
+            # Import the necessary modules
+            from datetime import datetime, timedelta
+            from filter_stations import RetrieveData
 
-        # Get today's date
-        today = datetime.now()
+            # An instance of the RetrieveData class
+            ret = RetrieveData(apiKey, apiSecret)
 
-        # Calculate one week ago
-        last_week = today - timedelta(days=7)
+            # Get today's date
+            today = datetime.now()
+            last_week = today - timedelta(days=7)
 
-        # Format date as a string
-        last_week_str = last_week.strftime('%Y-%m-%d')
-        today_str = today.strftime('%Y-%m-%d')
+            # Format date as a string
+            last_week_str = last_week.strftime('%Y-%m-%d')
+            today_str = today.strftime('%Y-%m-%d')
 
-        # Define the list of stations you want to retrieve data from example stations in Kenya
-        stations = list(ret.get_stations_info(countrycode='KE')['code'])
+            # Define the list of stations
+            stations = ['TA00001', 'TA00002']
+            variables = ['pr']
 
-        # Get the precipitation data for the stations in the list
-        variables = ['pr']
-
-        # retrieve the raw data for the stations, aggregate the data and save it as a csv file
-        dataset = 'raw'
-        aggregate = '1D'
-        csv_file = 'Kenya_precipitation_data'
-
-        # Call the multiple_measurements method to retrieve and aggregate data
-        aggregated_data = ret.multiple_measurements(stations, last_week_str,
-                                                    today_str, variables,
-                                                    dataset, csv_file, aggregate)
-        ```
+            # Call the multiple_measurements method
+            aggregated_data = ret.multiple_measurements(
+                stations, last_week_str, today_str, variables,
+                dataset='raw', csv_file='Kenya_precipitation_data', aggregate='1D'
+            )
         """
         if not isinstance(stations_list, list):
             raise ValueError('Pass in a list')
@@ -1019,23 +1006,28 @@ class RetrieveData:
     # # multiple quality flags for multiple stations
     def multiple_qualityflags(self, stations_list, startDate, endDate, csv_file=None):
         """
-        Retrieves and aggregates quality flag data for multiple stations within a specified date range.
+        Retrieves and aggregates quality flag data for multiple stations.
 
-        Parameters:
-        -----------
-        - stations_list (list): A list of station codes for which to retrieve data.
-        - startDate (str): The start date in 'YYYY-MM-DD' format.
-        - endDate (str): The end date in 'YYYY-MM-DD' format.
-        - csv_file (str, optional): The name of the CSV file to save the aggregated data. Default is None.
+        Parameters
+        ----------
+        stations_list : list
+            A list of station codes.
+        startDate : str
+            The start date in 'YYYY-MM-DD' format.
+        endDate : str
+            The end date in 'YYYY-MM-DD' format.
+        csv_file : str, optional
+            The name of the CSV file to save the data. Default is None.
 
-        Returns:
-        -----------
-        - pandas.DataFrame or None: A DataFrame containing the aggregated quality flag data for the specified stations,
-        or None if an error occurs.
+        Returns
+        -------
+        pandas.DataFrame or None
+            A DataFrame containing the aggregated quality flag data, or None if an error occurs.
 
-        Raises:
-            Exception: If an error occurs while retrieving data for a station.
-
+        Raises
+        ------
+        ValueError
+            If stations_list is not a list.
         """
         error_dict = dict()
 
@@ -1126,21 +1118,27 @@ class RetrieveData:
         """
         Retrieves and aggregates quality flag data for multiple stations within a specified date range.
 
-        Parameters:
-        -----------
-        - stations_list (list): A list of station codes for which to retrieve data.
-        - startDate (str): The start date in 'YYYY-MM-DD' format.
-        - endDate (str): The end date in 'YYYY-MM-DD' format.
-        - csv_file (str, optional): The name of the CSV file to save the aggregated data. Default is None.
+        Parameters
+        ----------
+        stations_list : list
+            A list of station codes for which to retrieve data.
+        startDate : str
+            The start date in 'YYYY-MM-DD' format.
+        endDate : str
+            The end date in 'YYYY-MM-DD' format.
+        csv_file : str, optional
+            The name of the CSV file to save the aggregated data. Default is None.
 
-        Returns:
-        -----------
-        - pandas.DataFrame or None: A DataFrame containing the aggregated quality flag data for the specified stations,
-        or None if an error occurs.
+        Returns
+        -------
+        pandas.DataFrame or None
+            A DataFrame containing the aggregated quality flag data for the specified stations,
+            or None if an error occurs.
 
-        Raises:
-            Exception: If an error occurs while retrieving data for a station.
-
+        Raises
+        ------
+        ValueError
+            If stations_list is not a list.
         """
         if not isinstance(stations_list, list):
             raise ValueError('Pass in a list')
