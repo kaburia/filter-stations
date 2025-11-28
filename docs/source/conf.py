@@ -37,8 +37,20 @@ html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
 
 
-# autodoc_mock_imports = [
-#     "rioxarray", "rasterio", "huggingface_hub", 
-#     "networkx", "dask", "xarray", "pandas", "numpy", 
-#     "requests", "tqdm", "python-dateutil"
-# ]
+
+# Mock ALL external libraries to prevent ImportError on ReadTheDocs
+autodoc_mock_imports = [
+    "rioxarray", 
+    "rasterio", 
+    "huggingface_hub", 
+    "networkx", 
+    "dask", 
+    "xarray", 
+    "pandas", 
+    "numpy", 
+    "requests", 
+    "tqdm", 
+    "python-dateutil",
+    "haversine",
+    "sklearn"
+]
