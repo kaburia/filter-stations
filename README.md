@@ -1,6 +1,6 @@
 ## Documentation
 You can find the documentation for the project by following this link<br>
-https://filter-stations.netlify.app/
+https://filter-stations.readthedocs.io/en/latest/
 
 Getting Started
 ---------------
@@ -17,6 +17,11 @@ All methods require an API key and secret, which can be obtained by contacting T
 To get started on the module test it out on Google Colab
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1KUUtvozBTePyezc1i5hhDuFFSWLzEcXH?usp=sharing)
+
+
+For earlier versions (<= v0.6.2) use the link below for documentation <br>
+
+https://filter-stations.netlify.app/
 
 ## Citations
 
