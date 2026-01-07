@@ -246,6 +246,12 @@ class RainLoader:
     - Downloads only the specific years requested.
     - Keeps them ZIPPED on disk to save space (20GB total vs 100GB extracted).
     - Opens them locally for robust, instant access.
+
+    Examples
+    --------
+    >>> from filter_stations import RainLoader
+    >>> read_token = '' # Request dsail-info@dkut.ac.ke to get a token to access the data
+    >>> loader = RainLoader(token=read_token)
     """
     def __init__(self, repo_id='DeKUT-DSAIL/weather-data', token=None):
         self.repo_id = repo_id
@@ -255,6 +261,40 @@ class RainLoader:
         warnings.filterwarnings('ignore')
 
     def get_dataset(self, dataset, start_date=None, end_date=None):
+        """
+        Main entry point to retrieve climate datasets (Gridded, Station, or Static).
+
+        Parameters
+        ----------
+        dataset : str
+            Name of the dataset. Options include:
+            - Gridded: 'imerg', 'chirps', 'era5', 'tamsat'
+            - Station: 'tahmo'
+            - Static: 'topography', 'nasadem'
+        start_date : str, optional
+            Start date (YYYY-MM-DD). Required for time-series datasets.
+        end_date : str, optional
+            End date (YYYY-MM-DD). Required for time-series datasets.
+
+        Returns
+        -------
+        xarray.Dataset
+            The requested dataset.
+
+        Examples
+        --------
+        >>> # User gets TAHMO (Stations)
+        >>> ds_stations = loader.get_dataset('TAHMO', '2024-01-01', '2024-01-30')
+
+        >>> # User gets IMERG (Grids) - Exact same interface
+        >>> ds_tamsat = loader.get_dataset('tamsat', '2024-01-01', '2024-01-20')
+        >>> ds_era5 = loader.get_dataset('era5', '2024-01-01', '2024-01-20')
+        >>> ds_imerg = loader.get_dataset('imerg', '2024-01-01', '2024-01-20')
+        >>> ds_chirps = loader.get_dataset('chirps', '2024-01-01', '2024-01-20')
+
+        >>> # User gets Topography (Static)
+        >>> ds_topo = loader.get_dataset('topography')
+        """
         dataset_lower = dataset.lower()
         
         # 1. Dispatcher
