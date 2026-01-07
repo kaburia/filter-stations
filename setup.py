@@ -9,7 +9,7 @@ with open("requirements.txt") as f:
 
 setup(
     name='filter_stations',
-    version='0.7.0',
+    version='0.7.1',
     packages=find_packages(),
     include_package_data=True,
     description='Making it easier to navigate and clean TAHMO weather station data and creating a way to access our unified weather dataset to reduce data fragmentation and global data divide in Africa.',
