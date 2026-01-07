@@ -240,12 +240,8 @@ from huggingface_hub import HfFileSystem, hf_hub_download
 
 class RainLoader:
     """
-    A unified loader for Climate Data from Hugging Face.
     
-    STRATEGY: 'Cache-On-Demand'
-    - Downloads only the specific years requested.
-    - Keeps them ZIPPED on disk to save space (20GB total vs 100GB extracted).
-    - Opens them locally for robust, instant access.
+    
 
     Examples
     --------
