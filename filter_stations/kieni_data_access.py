@@ -35,8 +35,8 @@ class Kieni:
         pandas.DataFrame
             DataFrame containing the weather data for the specified parameters, with columns containing NaN values dropped.
 
-        Usage
-        -----
+        Examples
+        --------
         To retrieve daily rainfall data from January 1, 2024, to January 31, 2024::
 
             # Instantiate the Kieni class
