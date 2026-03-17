@@ -8,11 +8,11 @@ with open("requirements.txt") as f:
     requirements = f.read().splitlines()
 
 setup(
-    name='filter_stations',
-    version='0.7.1',
+    name='WeatherMashariki',
+    version='0.8.0',
     packages=find_packages(),
     include_package_data=True,
-    description='Making it easier to navigate and clean TAHMO weather station data and creating a way to access our unified weather dataset to reduce data fragmentation and global data divide in Africa.',
+    description='A secure, unified Python interface for African climate data, integrating TAHMO station data and gridded datasets (IMERG, CHIRPS, ERA5, TAMSAT), and medium-to-seasonal weather models',
     author='Austin Kaburia',
     author_email='kaburiaaustin1@gmail.com',
     url='https://github.com/kaburia/filter-stations',
