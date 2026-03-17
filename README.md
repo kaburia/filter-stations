@@ -14,7 +14,7 @@ All methods require an API key and secret, which can be obtained by contacting T
 
 ### Example
 ```python
-from WeatherMashariki import AuthManager, MediumForecaster, RetrieveData
+from filter_stations import AuthManager, MediumForecaster, RetrieveData
 
 # 1. Authenticate once securely
 auth = AuthManager(email="your_email@domain.com", password="your_password")
