@@ -1,4 +1,3 @@
-# MasharikiWeather (formerly filter-stations)
 ## Documentation
 You can find the documentation for the project by following this link<br>
 https://filter-stations.readthedocs.io/en/latest/
