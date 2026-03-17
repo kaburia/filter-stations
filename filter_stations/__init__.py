@@ -10,6 +10,8 @@ Aims to feed in 2 classes
 from .filter_stations import RetrieveData
 from .datasets_loader import RainLoader
 from .kieni_data_access import Kieni
+from .handle_auth import AuthManager
+from .Forecasting import MediumForecaster
 
 # Defines the public interface of the package
-__all__ = ['RetrieveData', 'RainLoader', 'Kieni']
+__all__ = ['RetrieveData', 'RainLoader', 'Kieni', 'AuthManager', 'MediumForecaster']

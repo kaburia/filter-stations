@@ -29,9 +29,24 @@ endpoints = {'VARIABLES': 'services/assets/v2/variables', # 28 different variabl
 
 # Get data class
 class RetrieveData:
-    def __init__(self, apiKey, apiSecret):
-        self.apiKey = apiKey
-        self.apiSecret = apiSecret
+    def __init__(self, auth_session):
+        warnings.filterwarnings('ignore')
+        
+        # 1. Ask the Gatekeeper for the TAHMO credentials
+        credentials = auth_session.request_access(
+            service_name='tahmo', 
+            details={"action": "initialize_tahmo_client"}
+        )
+        
+        # 2. Extract the nested keys from the response
+        tahmo_keys = credentials.get('keys', {})
+        self.apiKey = tahmo_keys.get('apiKey')
+        self.apiSecret = tahmo_keys.get('apiSecret')
+        
+        if not self.apiKey or not self.apiSecret:
+            raise ValueError("Failed to retrieve complete TAHMO credentials from the gatekeeper.")
+            
+        print("TAHMO credentials securely loaded.")
 
     def __handleApiError(self, apiRequest):
         json =None
