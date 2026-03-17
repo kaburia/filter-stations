@@ -7,6 +7,7 @@ Getting Started
 ---------------
 All methods require an API key and secret, which can be obtained by contacting TAHMO. <br>
  
+ - ```AuthManager```: The new secure gateway. Log in once with your credentials to automatically unlock access to all downstream data loaders
 - ```RainLoader```: class is used to get our DSAIL unified weather dataset from HuggingFace (See the documentation for more information on this) <br>
 - ```MediumForecaster```: Connects to the Google Weather API to pull and flatten highly accurate 1-to-10 day forecasts (both hourly and daily)
 - The ```RetrieveData``` class is used to retrieve data from the TAHMO API endpoints.<br>
