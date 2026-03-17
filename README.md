@@ -1,3 +1,4 @@
+# WeatherMashariki (formerly filter-stations)
 ## Documentation
 You can find the documentation for the project by following this link<br>
 https://filter-stations.readthedocs.io/en/latest/
@@ -5,9 +6,27 @@ https://filter-stations.readthedocs.io/en/latest/
 Getting Started
 ---------------
 All methods require an API key and secret, which can be obtained by contacting TAHMO. <br>
-- The ```RetrieveData``` class is used to retrieve data from the TAHMO API endpoints.<br> 
-- The ```RainLoader``` class is used to get our DSAIL unified weather dataset from HuggingFace (See the documentation for more information on this) <br>
+ 
+- ```RainLoader```: class is used to get our DSAIL unified weather dataset from HuggingFace (See the documentation for more information on this) <br>
+- ```MediumForecaster```: Connects to the Google Weather API to pull and flatten highly accurate 1-to-10 day forecasts (both hourly and daily)
+- The ```RetrieveData``` class is used to retrieve data from the TAHMO API endpoints.<br>
 - The ```Kieni``` class is used to get weather data for stations 100km around Kieni from the central point.with water level data.<br>
+
+### Example
+```python
+from WeatherMashariki import AuthManager, MediumForecaster, RetrieveData
+
+# 1. Authenticate once securely
+auth = AuthManager(email="your_email@domain.com", password="your_password")
+
+# 2. Initialize any tool you need seamlessly
+weather = MediumForecaster(auth_session=auth)
+tahmo = RetrieveData(auth_session=auth)
+
+# 3. Pull your data!
+nyeri_forecast = weather.get_weather_api_forecast(lat=-0.41, lon=36.95, days=7)
+```
+
 <!-- - The ```Interactive_maps``` class is used to plot weather stations on an interactive map.<br>
 - The ```Water_level``` class is used to retrieve water level data and coordinates of gauging stations.<br> -->
 
@@ -19,7 +38,7 @@ To get started on the module test it out on Google Colab
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1KUUtvozBTePyezc1i5hhDuFFSWLzEcXH?usp=sharing)
 
 
-For earlier versions (<= v0.6.2) use the link below for documentation <br>
+For earlier versions `<= v0.6.2` use the link below for documentation <br>
 
 https://filter-stations.netlify.app/
 
