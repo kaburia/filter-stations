@@ -10,4 +10,4 @@ tqdm
 haversine
 networkx
 dask
-zarr
+zarr<3
