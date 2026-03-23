@@ -2,3 +2,6 @@ sphinx
 sphinx-rtd-theme
 sphinx-autodoc-typehints
 python-dateutil
+openmeteo-requests
+requests-cache
+retry-requests
