@@ -33,6 +33,19 @@ class MediumForecaster:
         Retrieves raw forecasting data from the Google Weather API.
         Automatically handles pagination.
         You must specify either 'days' (max 10) OR 'hours' (max 240).
+
+        :param lat: Latitude of the location.
+        :type lat: float
+        :param lon: Longitude of the location.
+        :type lon: float
+        :param days: Number of days to forecast (1 to 10). Defaults to None.
+        :type days: int, optional
+        :param hours: Number of hours to forecast (1 to 240). Defaults to None.
+        :type hours: int, optional
+        :return: A dictionary containing the forecast data and timezone information.
+        :rtype: dict
+        :raises ValueError: If both days and hours are specified, or if values are out of range.
+        :raises ConnectionError: If the API request fails.
         """
         # 1. Input Validation
         if days is not None and hours is not None:
