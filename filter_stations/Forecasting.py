@@ -103,3 +103,152 @@ class MediumForecaster:
         }
         
         return unified_response
+    
+import openmeteo_requests
+import requests_cache
+import pandas as pd
+import json
+import os
+from retry_requests import retry
+
+class SeasonalForecaster:
+    def __init__(self, auth_session=None, catalog_path="openmeteo_catalog.json"):
+        """
+        Initializes the seasonal forecaster and loads the complete variable/model catalog.
+        """
+        self.auth = auth_session
+        self.url = "https://seasonal-api.open-meteo.com/v1/seasonal"
+        
+        # Load the external catalog
+        if not os.path.exists(catalog_path):
+            raise FileNotFoundError(f"Missing configuration file: {catalog_path}.")
+            
+        with open(catalog_path, "r") as f:
+            self.catalog = json.load(f)
+
+        # Setup the Open-Meteo API client with cache and retry on error
+        cache_session = requests_cache.CachedSession('.cache', expire_after=3600)
+        retry_session = retry(cache_session, retries=5, backoff_factor=0.2)
+        self.client = openmeteo_requests.Client(session=retry_session)
+
+    # --- Catalog Helper Methods ---
+    def list_api_variables(self):
+        """Returns the pre-formatted variable strings to pass directly to the API."""
+        return self.catalog.get("api_variables", {})
+
+    def list_all_models(self):
+        """Returns every model identifier defined in the Open-Meteo SDK."""
+        return self.catalog.get("fbs_reference", {}).get("models", [])
+
+    def list_base_variables(self):
+        """Returns the raw physical variables defined in the Open-Meteo FlatBuffers."""
+        return self.catalog.get("fbs_reference", {}).get("variables", [])
+
+    def list_aggregations(self):
+        """Returns the raw FlatBuffer aggregation types supported by Open-Meteo."""
+        return self.catalog.get("fbs_reference", {}).get("aggregations", [])
+        
+    def list_units(self):
+        """Returns all supported measurement units."""
+        return self.catalog.get("fbs_reference", {}).get("units", [])
+
+    def list_probabilities(self):
+        """Returns all supported probability thresholds."""
+        return self.catalog.get("fbs_reference", {}).get("probabilities", [])
+
+    # --- Core API Methods ---
+    def get_forecast(self, lat, lon, models=None, forecast_months=3, 
+                     hourly=None, daily=None, weekly=None, monthly=None):
+        """
+        Fetches seasonal forecast data across any requested temporal resolution.
+        """
+        hourly, daily = hourly or [], daily or []
+        weekly, monthly = weekly or [], monthly or []
+        
+        if not any([hourly, daily, weekly, monthly]):
+            raise ValueError("You must request at least one variable array (hourly, daily, weekly, or monthly).")
+            
+        params = {
+            "latitude": lat, "longitude": lon, "forecast_months": forecast_months,
+        }
+        
+        if models: params["models"] = models
+        if hourly: params["hourly"] = hourly
+        if daily: params["daily"] = daily
+        if weekly: params["weekly"] = weekly
+        if monthly: params["monthly"] = monthly
+
+        responses = self.client.weather_api(self.url, params=params)
+        
+        results = []
+        for i, response in enumerate(responses):
+            location_data = {
+                "latitude": response.Latitude(),
+                "longitude": response.Longitude(),
+                "model_index": i
+            }
+            
+            # Pass the timeframe so the parser knows how to handle the dates
+            if hourly: location_data["hourly_df"] = self._parse_flatbuffer(response.Hourly(), hourly, "standard")
+            if daily: location_data["daily_df"] = self._parse_flatbuffer(response.Daily(), daily, "standard")
+            if weekly: location_data["weekly_df"] = self._parse_flatbuffer(response.Weekly(), weekly, "standard")
+            if monthly: location_data["monthly_df"] = self._parse_flatbuffer(response.Monthly(), monthly, "monthly")
+                
+            results.append(location_data)
+            
+        return results
+
+    def calculate_ensemble_mean(self, df, variable_name):
+        """Calculates the mean across all ensemble members for a specific variable."""
+        member_cols = [col for col in df.columns if col.startswith(f"{variable_name}_member")]
+        if not member_cols: return df # Skip if it's already an aggregated/anomaly variable
+        df[f"{variable_name}_ensemble_mean"] = df[member_cols].mean(axis=1)
+        return df
+
+    def _parse_flatbuffer(self, data_block, requested_vars, timeframe):
+        """
+        Smartly extracts data, handling Int64 arrays (sunrise/sunset) 
+        and missing Ensemble Members (weekly/monthly anomalies).
+        """
+        # 1. Handle time index formatting
+        if timeframe == "monthly":
+            date_range = pd.date_range(
+                start=f"{data_block.Year()}-{data_block.Month()}-01",
+                periods=data_block.Count(), freq="MS"
+            )
+        else:
+            date_range = pd.date_range(
+                start=pd.to_datetime(data_block.Time(), unit="s", utc=True),
+                end=pd.to_datetime(data_block.TimeEnd(), unit="s", utc=True),
+                freq=pd.Timedelta(seconds=data_block.Interval()), inclusive="left"
+            )
+        
+        parsed_data = {"date": date_range}
+        
+        # 2. Determine member chunking
+        num_requested_vars = len(requested_vars)
+        total_variables_returned = data_block.VariablesLength()
+        members_per_var = total_variables_returned // num_requested_vars
+
+        var_index = 0
+        for var_name in requested_vars:
+            for _ in range(members_per_var):
+                variable = data_block.Variables(var_index)
+                
+                # 3. Handle Column Naming (Catch missing Ensemble Members in Weekly/Monthly)
+                try:
+                    member_id = variable.EnsembleMember()
+                    col_name = f"{var_name}_member{member_id}"
+                except Exception:
+                    # If it has no members (e.g., precipitation_anomaly), just use the var name
+                    col_name = var_name if members_per_var == 1 else f"{var_name}_{_}"
+
+                # 4. Handle Int64 formatting (Catch Sunrise/Sunset Unix timestamps)
+                if var_name in ["sunrise", "sunset"]:
+                    parsed_data[col_name] = variable.ValuesInt64AsNumpy()
+                else:
+                    parsed_data[col_name] = variable.ValuesAsNumpy()
+                    
+                var_index += 1
+                
+        return pd.DataFrame(data=parsed_data)
