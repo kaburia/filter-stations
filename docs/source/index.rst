@@ -1,7 +1,7 @@
 Welcome to filter-stations documentation!
 =========================================
 
-This documentation covers the usage of the ``filter_stations`` package, including the TAHMO station filtering tools and the unified RainLoader for accessing climate data from Hugging Face.
+This documentation covers the installation, usage, and API reference for the package.
 
 Getting Started
 ---------------
@@ -70,9 +70,9 @@ Example
 
     seasonal.list_api_variables()
 
-.. image:: https://colab.research.google.com/assets/colab-badge.svg
-   :target: https://colab.research.google.com/drive/1KUUtvozBTePyezc1i5hhDuFFSWLzEcXH?usp=sharing
-   :alt: Open In Colab
+.. .. image:: https://colab.research.google.com/assets/colab-badge.svg
+..    :target: https://colab.research.google.com/drive/1KUUtvozBTePyezc1i5hhDuFFSWLzEcXH?usp=sharing
+..    :alt: Open In Colab
 
 .. toctree::
    :maxdepth: 2
