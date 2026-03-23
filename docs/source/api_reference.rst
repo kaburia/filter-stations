@@ -21,3 +21,10 @@ Kieni Weather Station Data
    :members:
    :undoc-members:
    :show-inheritance:
+
+Forecasting and Seasonality
+---------------------------
+.. automodule:: filter_stations.Forecasting
+   :members:
+   :undoc-members:
+   :show-inheritance:

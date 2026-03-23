@@ -11,3 +11,6 @@ haversine
 networkx
 dask
 zarr<3
+openmeteo-requests
+requests-cache
+retry-requests

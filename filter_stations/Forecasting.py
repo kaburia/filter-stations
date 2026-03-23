@@ -133,12 +133,22 @@ class SeasonalForecaster:
 
     # --- Catalog Helper Methods ---
     def list_api_variables(self):
-        """Returns the pre-formatted variable strings to pass directly to the API."""
+        """
+        Returns the pre-formatted variable strings to pass directly to the API.
+
+        :return: A dictionary of API variables available in the catalog.
+        :rtype: dict
+        """
         return self.catalog.get("api_variables", {})
 
     def list_all_models(self):
-        """Returns every model identifier defined in the Open-Meteo SDK."""
-        return self.catalog.get("fbs_reference", {}).get("models", [])
+        """
+        Returns every model identifier defined in the Open-Meteo SDK.
+
+        :return: A list of model names sorted alphabetically.
+        :rtype: list[str]
+        """
+        return sorted(self.catalog.get("fbs_reference", {}).get("models", []))
 
     def list_base_variables(self):
         """Returns the raw physical variables defined in the Open-Meteo FlatBuffers."""
@@ -156,11 +166,32 @@ class SeasonalForecaster:
         """Returns all supported probability thresholds."""
         return self.catalog.get("fbs_reference", {}).get("probabilities", [])
 
-    # --- Core API Methods ---
+    # --- Core API Methods
     def get_forecast(self, lat, lon, models=None, forecast_months=3, 
                      hourly=None, daily=None, weekly=None, monthly=None):
         """
         Fetches seasonal forecast data across any requested temporal resolution.
+
+        :param lat: Latitude of the location.
+        :type lat: float
+        :param lon: Longitude of the location.
+        :type lon: float
+        :param models: List of weather models to use for the forecast. Defaults to None.
+        :type models: list[str], optional
+        :param forecast_months: Number of months to forecast. Defaults to 3.
+        :type forecast_months: int, optional
+        :param hourly: List of hourly variables to request.
+        :type hourly: list[str], optional
+        :param daily: List of daily variables to request.
+        :type daily: list[str], optional
+        :param weekly: List of weekly variables to request.
+        :type weekly: list[str], optional
+        :param monthly: List of monthly variables to request.
+        :type monthly: list[str], optional
+        :return: A list of dictionaries, where each dictionary represents the forecast data for a specific model 
+                 and location. Keys include 'latitude', 'longitude', 'model_index', and DataFrames for requested timeframes.
+        :rtype: list[dict]
+        :raises ValueError: If no variables (hourly, daily, weekly, or monthly) are requested.
         """
         hourly, daily = hourly or [], daily or []
         weekly, monthly = weekly or [], monthly or []
