@@ -6,6 +6,12 @@ Seasonal Forecasting will be extracted from IRI
 
 import requests
 import warnings
+import openmeteo_requests
+import requests_cache
+import pandas as pd
+import json
+import os
+from retry_requests import retry
 
 class MediumForecaster:
     """
@@ -117,12 +123,7 @@ class MediumForecaster:
         
         return unified_response
     
-import openmeteo_requests
-import requests_cache
-import pandas as pd
-import json
-import os
-from retry_requests import retry
+
 
 class SeasonalForecaster:
     def __init__(self, auth_session=None, catalog_path="openmeteo_catalog.json"):
@@ -242,12 +243,12 @@ class SeasonalForecaster:
             
         return results
 
-    def calculate_ensemble_mean(self, df, variable_name):
-        """Calculates the mean across all ensemble members for a specific variable."""
-        member_cols = [col for col in df.columns if col.startswith(f"{variable_name}_member")]
-        if not member_cols: return df # Skip if it's already an aggregated/anomaly variable
-        df[f"{variable_name}_ensemble_mean"] = df[member_cols].mean(axis=1)
-        return df
+    # def calculate_ensemble_mean(self, df, variable_name):
+    #     """Calculates the mean across all ensemble members for a specific variable."""
+    #     member_cols = [col for col in df.columns if col.startswith(f"{variable_name}_member")]
+    #     if not member_cols: return df # Skip if it's already an aggregated/anomaly variable
+    #     df[f"{variable_name}_ensemble_mean"] = df[member_cols].mean(axis=1)
+    #     return df
 
     def _parse_flatbuffer(self, data_block, requested_vars, timeframe):
         """
