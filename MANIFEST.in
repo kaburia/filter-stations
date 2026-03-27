@@ -1,4 +1,5 @@
 recursive-include filter_stations/geo *
 recursive-include water_level_pipeline_files *
+include filter_stations/openmeteo_catalog.json
 include requirements.txt
 include README.md
