@@ -9,7 +9,7 @@ with open("requirements.txt") as f:
 
 setup(
     name='filter_stations',
-    version='0.8.2',
+    version='0.8.3',
     packages=find_packages(),
     include_package_data=True,
     description='A secure, unified Python interface for African climate data, integrating TAHMO station data and gridded datasets (IMERG, CHIRPS, ERA5, TAMSAT), and medium-to-seasonal weather models',

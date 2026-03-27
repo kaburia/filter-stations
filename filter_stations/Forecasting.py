@@ -126,12 +126,15 @@ class MediumForecaster:
 
 
 class SeasonalForecaster:
-    def __init__(self, auth_session=None, catalog_path="openmeteo_catalog.json"):
+    def __init__(self, auth_session=None, catalog_path=None):
         """
         Initializes the seasonal forecaster and loads the complete variable/model catalog.
         """
         self.auth = auth_session
         self.url = "https://seasonal-api.open-meteo.com/v1/seasonal"
+        
+        if catalog_path is None:
+            catalog_path = os.path.join(os.path.dirname(__file__), "openmeteo_catalog.json")
         
         # Load the external catalog
         if not os.path.exists(catalog_path):
